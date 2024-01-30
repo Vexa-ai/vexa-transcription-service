@@ -53,11 +53,11 @@ class SpeakerEmbs(LocalBase):
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     embedding = mapped_column(Vector(256))
     speaker_id = mapped_column(UUID(as_uuid=True), ForeignKey('speakers.id'), nullable=False)
-    client_id = Column(UUID(as_uuid=True), nullable=False)
+    client_id = Column(UUID(as_uuid=True), ForeignKey('clients.id'), nullable=False)
 
 
 
 class Speakers(LocalBase):
     __tablename__ = 'speakers'
     id = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    client_id = Column(UUID(as_uuid=True), nullable=False)
+    client_id = Column(UUID(as_uuid=True), ForeignKey('clients.id'), nullable=False)

@@ -67,6 +67,7 @@ def parse_segment(segment):
 async def process(redis_client):
     _,item = await redis_client.brpop('Audio2DiarizeQueue')
     audio_name,client_id = item.split(':')
+    print(client_id)
     audio = Audio(audio_name,redis_client)
     #diarization = Diarisation(audio_name,redis_client)
     if await audio.get():
