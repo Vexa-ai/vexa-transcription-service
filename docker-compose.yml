@@ -17,8 +17,8 @@ services:
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
 
-    extra_hosts:
-       - "host.docker.internal:host-gateway" #to connect to host ports
+    # extra_hosts:
+    #    - "host.docker.internal:host-gateway" #to connect to host ports
 
     depends_on:
       - db
@@ -38,8 +38,8 @@ services:
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
 
-    extra_hosts:
-       - "host.docker.internal:host-gateway" #to connect to host ports
+    # extra_hosts:
+    #    - "host.docker.internal:host-gateway" #to connect to host ports
 
 
   audio:
@@ -55,7 +55,8 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
 
     extra_hosts:
-       - "host.docker.internal:host-gateway" #to connect to host ports
+       - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
+
 
 
 
@@ -70,3 +71,12 @@ services:
       - ${DATA_PATH}/docker_diarizepsql:/var/lib/postgresql/data
     ports: 
       - 5432:5432
+
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    ports:
+      - "6381:6379" #needs to be exposed outside for remote connection of the main server
+    volumes:
+    - ${DATA_PATH}/docker_redis_audio:/data

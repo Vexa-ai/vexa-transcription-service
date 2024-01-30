@@ -52,5 +52,5 @@ d = { 'settings': { 'branch': '{branch}',
                              'audio.redis.StreamItem.load': ('redis.html#streamitem.load', 'audio/redis.py'),
                              'audio.redis.Transcript': ('redis.html#transcript', 'audio/redis.py'),
                              'audio.redis.Transcript.__init__': ('redis.html#transcript.__init__', 'audio/redis.py'),
-                             'audio.redis.get_redis': ('redis.html#get_redis', 'audio/redis.py')},
-            'audio.transcribe': {'audio.transcribe.process': ('05.transcribe.html#process', 'audio/transcribe.py')}}}
+                             'audio.redis.get_inner_redis': ('redis.html#get_inner_redis', 'audio/redis.py'),
+                             'audio.redis.get_stream_redis': ('redis.html#get_stream_redis', 'audio/redis.py')}}}

@@ -31,7 +31,7 @@ POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
 
 
 
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@host.docker.internal:5432/db"
+DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db:5432/db"
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 session = Session()

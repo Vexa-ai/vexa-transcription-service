@@ -84,7 +84,7 @@ async def process(redis_client):
 
 
 async def main():
-    redis_client = await get_redis()
+    redis_client = await get_inner_redis()
     while True:
         await process(redis_client)
 
