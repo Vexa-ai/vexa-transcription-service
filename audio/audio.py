@@ -26,7 +26,7 @@ class AudioSlicer:
         return cls(data, format)
 
     async def export2file(self, export_path, start=None, end=None):
-        def export(segment, export_path, format):
+        def export(segment, export_path):
             segment.export(export_path, format=self.format)
 
         segment = self.slice(start, end)
@@ -60,4 +60,23 @@ class AudioSlicer:
             self.audio += new_segment
 
         await asyncio.to_thread(append_, additional_data)
+
+    def append_raw_audio(self, raw_data):
+        frame_rate = self.audio.frame_rate
+        sample_width = self.audio.sample_width
+        channels = self.audio.channels
+        frame_size = sample_width * channels
+
+        # Ensure the data length is a multiple of the frame size
+        aligned_data_length = len(raw_data) - (len(raw_data) % frame_size)
+        aligned_data = raw_data[:aligned_data_length]
+
+        new_segment = AudioSegment(
+            data=aligned_data,
+            sample_width=sample_width,
+            frame_rate=frame_rate,
+            channels=channels
+        )
+        self.audio = self.audio + new_segment
+
 
