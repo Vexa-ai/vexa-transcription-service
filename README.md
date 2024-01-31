@@ -10,3 +10,12 @@ docker build --build-arg PG_MAJOR=15 -t myuser/pgvector .```
 
 `engine_execute('CREATE EXTENSION vector;')`
 
+
+
+https://github.com/pyannote/pyannote-audio/issues/1563
+
+```
+torch==2.0.1
+pyannote-audio==3.1.0
+```
+

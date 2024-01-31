@@ -1,64 +1,63 @@
-import io
-
-from sqlalchemy import select, update
-from torch import cosine_similarity
+from qdrant_client.http.models import Distance, VectorParams
+from qdrant_client.http.models import PointStruct
+from uuid import uuid4
 from pyannote.audio import Pipeline
+import io
 import pandas as pd
-from audio.psql import *
+from qdrant_client import QdrantClient
 from audio.redis import *
 import asyncio
 import torch
 
-def get_stored_knn(emb, client_id):
-
-    """get nearest neighbour and score"""
-
-    q = session.scalars(select(SpeakerEmbs).filter(SpeakerEmbs.client_id==client_id).order_by(SpeakerEmbs.embedding.cosine_distance(emb)).limit(1)).first()
-    if q:
-        nearest = q.embedding
-        nearest = torch.Tensor(q.embedding).unsqueeze(0)
-
-        emb = torch.Tensor(emb).unsqueeze(0)
-        return q.speaker_id, cosine_similarity(nearest, emb).item()
-    else: None
-
-def add_new_speaker(emb,client_id):
-    new_speaker = Speakers(client_id=client_id)
-    session.add(new_speaker)
-    session.commit()
-    speaker_emb_q = SpeakerEmbs(embedding=emb,client_id=client_id,speaker_id=new_speaker.id)
-    session.add(speaker_emb_q)
-    session.commit()
-    return new_speaker.id
+client = QdrantClient("qdrant", port=6333)
 
 
 
-def process_speaker_emb(emb,client_id):
-    knn = get_stored_knn(emb, client_id)
-    if knn:
-        speaker_id, score = get_stored_knn(emb, client_id)
-        print(score)
-        if update:
-            if speaker_id:
-                if score > 0.9:
-                    identified_speaker = speaker_id
-                elif score > 0.6:
-                    identified_speaker = speaker_id
-                    speaker_emb_q = SpeakerEmbs(embedding=emb,client_id=client_id,speaker_id=speaker_id)
-                    session.add(speaker_emb_q)
-                    session.commit()
-                else:
-                    speaker_id = add_new_speaker(emb,client_id)
-            else:
-                speaker_id = add_new_speaker(emb,client_id)
-        else: pass
 
+def get_stored_knn(emb:list, client_id):
+    search_result = client.search(
+        collection_name=client_id, query_vector=emb, limit=1)
+    if len(search_result)>0:
+        search_result = search_result[0]
+        return search_result.payload['speaker_id'], search_result.score
+    else: return None,None
+
+def create_collection_ifnotexists(client_id):
+    if not client_id in [c.name for c in client.get_collections().collections]:
+        client.create_collection(
+            collection_name=client_id,
+            vectors_config=VectorParams(size=256, distance=Distance.COSINE),
+        )
+
+
+def add_new_speaker_emb(emb:list,client_id,speaker_id=None):
+    speaker_id = speaker_id if speaker_id else str(uuid4())
+
+    operation_info = client.upsert(
+        collection_name=client_id,
+        wait=True,
+        points=[PointStruct(id=str(uuid4()), vector=emb,payload={'speaker_id':speaker_id})]
+
+    )
+
+    return speaker_id
+
+
+
+def process_speaker_emb(emb:list,client_id):
+    speaker_id, score = get_stored_knn(emb, client_id)
+    print(score)
+    if speaker_id:
+        if score > 0.9:
+            pass
+        elif score > 0.6:
+            add_new_speaker_emb(emb,client_id,speaker_id=speaker_id)
+        else:
+            speaker_id = add_new_speaker_emb(emb,client_id)
     else:
-        speaker_id = add_new_speaker(emb,client_id)
-        score = 0
+        speaker_id = add_new_speaker_emb(emb,client_id)
 
     return str(speaker_id), score
-
 
 
 def parse_segment(segment):
@@ -67,30 +66,37 @@ def parse_segment(segment):
 async def process(redis_client):
     _,item = await redis_client.brpop('Audio2DiarizeQueue')
     audio_name,client_id = item.split(':')
-    print(client_id)
+    create_collection_ifnotexists(client_id)
     audio = Audio(audio_name,redis_client)
     #diarization = Diarisation(audio_name,redis_client)
     if await audio.get():
         print('here')
         output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
         if len(embeddings)==0: audio.delete()
-        speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
-        segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker'])
-        df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
-        diarization_data = df.to_dict('records')
-        await Diarisation(audio_name,redis_client,diarization_data).save()
-        await redis_client.publish(f'DiarizeReady', audio_name)
-        print('done')
+    speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
+    segments = [i for i in output.itertracks(yield_label=True)]
+    df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker'])
+    df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
+    diarization_data = df.to_dict('records')
+    await Diarisation(audio_name,redis_client,diarization_data).save()
+    await redis_client.publish(f'DiarizeReady', audio_name)
+    print('done')
 
 
 async def main():
     redis_client = await get_inner_redis()
-    while True:
-        await process(redis_client)
+    try:
+        while True:
+            await process(redis_client)
+    except KeyboardInterrupt:
+        pass  # Add any cleanup here if necessary
+    finally:
+        redis_client.close()
+        await redis_client.wait_closed()
 
 
 if __name__ == '__main__':
+
 
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
@@ -100,5 +106,4 @@ if __name__ == '__main__':
                                
 
 
-    while True:
-        asyncio.run(main())
+    asyncio.run(main())
