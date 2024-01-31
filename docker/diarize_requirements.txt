@@ -1,16 +1,10 @@
-#pyannote.audio==3.1.1
 redis==5.0.1
 pydantic==2.5.3
 pydub==0.25.1
 python-dotenv==1.0.1
 pgvector==0.2.4
 psycopg2-binary==2.9.9
-#faster-whisper==0.10.0
-
-
 
 torch==2.0.1
 pyannote-audio==3.1.0
-
-
 qdrant-client==1.7.1

@@ -32,9 +32,9 @@ class AudioSlicer:
         segment = self.slice(start, end)
         await asyncio.to_thread(export, segment, export_path)
 
-    async def export_data(self, start=None, end=None):
+    async def export_data(self, start=None, end=None,format='mp3'):
         def export(segment, buffer):
-            segment.export(buffer, format='mp3')
+            segment.export(buffer, format=format)
             return buffer.getvalue()
 
         segment = self.slice(start, end)
@@ -53,4 +53,11 @@ class AudioSlicer:
             audio = self.audio
 
         return audio
+    
+    async def append(self, additional_data):
+        def append_(additional_data):
+            new_segment = AudioSegment.from_file(io.BytesIO(additional_data), format=self.format)
+            self.audio += new_segment
+
+        await asyncio.to_thread(append_, additional_data)
 
