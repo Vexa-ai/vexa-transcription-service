@@ -5,38 +5,41 @@ __all__ = ['get_inner_redis', 'get_stream_redis', 'get_connection_queues', 'Stre
            'Transcript', 'Diarisation']
 
 # %% ../nbs/00_redis.ipynb 3
-import redis.asyncio as aioredis
-from pydantic import BaseModel
-from typing import Optional,Union,List, Literal
-from dataclasses import dataclass
-import redis
-import json
-import pandas as pd
+try:
+    import redis.asyncio as aioredis
+    from pydantic import BaseModel
+    from typing import Optional,Union,List, Literal
+    from dataclasses import dataclass
+    import redis
+    import json
+    import pandas as pd
+except:
+    pass
 
 
 # %% ../nbs/00_redis.ipynb 4
 async def get_inner_redis():
     
     db = await aioredis.from_url(
-            "redis://redis:6379/0",decode_responses=True
+            "redis://redis/0",decode_responses=True
         )
 
     await db.ping()
 
     return db
 
-# %% ../nbs/00_redis.ipynb 5
-async def get_stream_redis():
+# %% ../nbs/00_redis.ipynb 7
+async def get_stream_redis(host = 'host.docker.internal'):
     
     db = await aioredis.from_url(
-            "redis://host.docker.internal:6380/0",decode_responses=True
+            f"redis://{host}:6380/0",decode_responses=True
         )
 
     await db.ping()
 
     return db
 
-# %% ../nbs/00_redis.ipynb 8
+# %% ../nbs/00_redis.ipynb 11
 async def get_connection_queues(name, redis_client, min_length=1, pattern='*'):
     """
     Finds queues that match a given pattern and have a minimum number of items,
@@ -60,7 +63,7 @@ async def get_connection_queues(name, redis_client, min_length=1, pattern='*'):
     return pd.DataFrame(data)
 
 
-# %% ../nbs/00_redis.ipynb 12
+# %% ../nbs/00_redis.ipynb 15
 class StreamItem(BaseModel):
     chunk: bytes
     timestamp: Optional[str] = None
@@ -82,7 +85,7 @@ class StreamItem(BaseModel):
         return cls(chunk=bytes.fromhex(item['chunk']), timestamp=item['timestamp'])
 
 
-# %% ../nbs/00_redis.ipynb 13
+# %% ../nbs/00_redis.ipynb 16
 class ApiConnection:
     """
     connection to initial chrome extention feed
@@ -149,7 +152,7 @@ class ApiConnection:
 
 
 
-# %% ../nbs/00_redis.ipynb 14
+# %% ../nbs/00_redis.ipynb 17
 @dataclass
 class Data:
     chunk_name:str

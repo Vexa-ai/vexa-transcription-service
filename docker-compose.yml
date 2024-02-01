@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   diarize:
-   # command: tail -f /dev/null
-    command: ['python3','/app/diarize.py']
+    command: tail -f /dev/null
+    #command: ['python3','/app/diarize.py']
     # environment:
     #   POSTGRES_DB: db
     #   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,8 +33,9 @@ services:
       - qdrant
 
   transcribe:
-    command: ['python3','/app/transcribe.py']
-    #command: tail -f /dev/null
+   # command: ['python3','/app/transcribe.py']
+
+    command: tail -f /dev/null
 
     # build:
       # context: docker
@@ -73,8 +74,6 @@ services:
        - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
 
 
-
-
   # db:
   #   environment:
   #     POSTGRES_DB: db
@@ -92,8 +91,6 @@ services:
     image: qdrant/qdrant
     volumes:
       - ${DATA_PATH}/qdrant:/qdrant/data
-    environment:
-      QDRANT__STORAGE__PERSISTENT_STORAGE_PATH: /qdrant/data
     restart: unless-stopped
 
 

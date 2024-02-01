@@ -9,7 +9,7 @@ from audio.redis import *
 import asyncio
 import torch
 
-client = QdrantClient("qdrant", port=6333)
+client = QdrantClient("qdrant")
 
 
 
@@ -64,6 +64,7 @@ def parse_segment(segment):
     return segment[0].start, segment[0].end,int(segment[-1].split('_')[1])
 
 async def process(redis_client):
+    # try:
     _,item = await redis_client.brpop('Audio2DiarizeQueue')
     audio_name,client_id = item.split(':')
     create_collection_ifnotexists(client_id)
@@ -79,8 +80,11 @@ async def process(redis_client):
     df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
     diarization_data = df.to_dict('records')
     await Diarisation(audio_name,redis_client,diarization_data).save()
-    await redis_client.publish(f'DiarizeReady', audio_name)
     print('done')
+    # except Exception as e:
+    #     print(e)
+    # finally:
+    await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
 
 
 async def main():
@@ -89,10 +93,10 @@ async def main():
         while True:
             await process(redis_client)
     except KeyboardInterrupt:
-        pass  # Add any cleanup here if necessary
+        pass 
     finally:
         redis_client.close()
-        await redis_client.wait_closed()
+      #  await redis_client.wait_closed()
 
 
 if __name__ == '__main__':
