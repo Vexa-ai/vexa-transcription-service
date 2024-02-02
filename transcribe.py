@@ -25,7 +25,7 @@ async def process(redis_client):
         segment_audio_data = await audio_data_slicer.export_data(segment['start'],segment['end'])
         print('transcribe job started')
         
-        segments, _ = model.transcribe(io.BytesIO(segment_audio_data), beam_size=5)
+        segments, _ = model.transcribe(io.BytesIO(segment_audio_data), beam_size=5,vad_filter=True)
         start_time = time.time()
         data = [{'start':s.start, 'end':s.end, 'text':s.text} for s in list(segments)]
         await Transcript(segment['name'],redis_client,data).save()

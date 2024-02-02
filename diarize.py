@@ -48,9 +48,9 @@ def process_speaker_emb(emb:list,client_id):
     speaker_id, score = get_stored_knn(emb, client_id)
     print(score)
     if speaker_id:
-        if score > 0.9:
+        if score > 0.95:
             pass
-        elif score > 0.6:
+        elif score > 0.9:
             add_new_speaker_emb(emb,client_id,speaker_id=speaker_id)
         else:
             speaker_id = add_new_speaker_emb(emb,client_id)
