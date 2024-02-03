@@ -89,17 +89,22 @@ path = f'/app/testdata/{connection_id}.webm'
 on_start = False
 
 start = 2000
-min_length = 20
+step = 20
 max_length = 60
 
 
 async def process():
+    
 
     redis_stream_client = await get_stream_redis()
     redis_inner_client = await get_inner_redis()
 
     connections =  await get_connections('initialFeed_audio',redis_stream_client)
     connection_ids = [c.replace('initialFeed_audio:','') for c in connections]
+
+
+    start = await redis_inner_client.lpush(f'Start:{connection_id}')
+    start = start if start else 0
 
     #connection_id??
     await writestream2file(connection_id,redis_stream_client)
@@ -110,7 +115,7 @@ async def process():
     slice_duration = audio_slicer.audio.duration_seconds
     print(slice_duration)
 
-    if slice_duration > min_length:
+    if slice_duration > step:
 
         audio_data = await audio_slicer.export_data()
         audio_name = str(uuid.uuid4())
@@ -134,9 +139,12 @@ async def process():
     df['speaker'] = np.where(df['len']>0.5,df['speaker'],np.nan)
     df['speaker'] = df['speaker'].fillna(method='ffill').fillna(method='bfill')
 
+    start_ = await get_next_chunk_start(diarization_result,slice_duration)
+
+    start = start_ if start_ else start+length
 
     await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps(df.to_dict(orient='records')))
-    await redis_inner_client.lpush(f'Start:{connection_id}', json.dumps(df.to_dict(orient='records')))
+    await redis_inner_client.lpush(f'Start:{connection_id}', start)
 
 
 while True:
