@@ -1,36 +1,24 @@
 version: '3.8'
 
 services:
-  diarize:
-    command: tail -f /dev/null
-    #command: ['python3','/app/diarize.py']
-    # environment:
-    #   POSTGRES_DB: db
-    #   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    #   POSTGRES_USER: ${POSTGRES_USER}
-    build:
-      context: docker
-      dockerfile: DiarizeDockerfile
-    # image: diarize:0.1
-    #image: transcribe:0.0
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-    - .:/app
-    - ${DATA_PATH}/audio:/audio
-    - /var/run/docker.sock:/var/run/docker.sock
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #       - driver: nvidia
-    #         capabilities: [gpu]
+  # diarize:
+  #   command: tail -f /dev/null
+  #   #command: ['python3','/app/diarize.py']
 
-    # extra_hosts:
-    #    - "host.docker.internal:host-gateway" #to connect to host ports
+  #   build:
+  #     context: docker
+  #     dockerfile: DiarizeDockerfile
+  #   # image: diarize:0.1
+  #   #image: transcribe:0.0
+  #   restart: unless-stopped
+  #   runtime: nvidia
+  #   volumes:
+  #   - .:/app
+  #   - ${DATA_PATH}/audio:/audio
+  #   - /var/run/docker.sock:/var/run/docker.sock
 
-    depends_on:
-      - qdrant
+  #   depends_on:
+  #     - qdrant
 
   transcribe:
    # command: ['python3','/app/transcribe.py']
@@ -47,22 +35,14 @@ services:
     - .:/app
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #       - driver: nvidia
-    #         capabilities: [gpu]
-
-    # extra_hosts:
-    #    - "host.docker.internal:host-gateway" #to connect to host ports
-
 
   audio:
     command: tail -f /dev/null
 
-   # build: .
-    image: audio:0.1
+    build: 
+      context: docker
+      dockerfile: MainDockerfile
+    #image: audio:0.1
     restart: unless-stopped
     runtime: nvidia
     volumes:
@@ -72,19 +52,6 @@ services:
 
     extra_hosts:
        - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
-
-
-  # db:
-  #   environment:
-  #     POSTGRES_DB: db
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-  #     POSTGRES_USER: ${POSTGRES_USER}
-  #   image: myuser/pgvector
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ${DATA_PATH}/docker_diarizepsql:/var/lib/postgresql/data
-  #   ports: 
-  #     - 5432:5432
 
   
   qdrant:

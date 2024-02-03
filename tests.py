@@ -1,7 +1,5 @@
 from audio.redis import *
 from audio.audio import *
-#from audio.process import *
-
 from pathlib import Path
 import json
 
@@ -10,7 +8,6 @@ import uuid
 import pandas as pd
 
 import asyncio
-import redis.asyncio as aioredis
 from dataclasses import dataclass
 import numpy as np
 
@@ -92,28 +89,38 @@ path = f'/app/testdata/{connection_id}.webm'
 on_start = False
 
 start = 2000
-length = 300
+min_length = 20
+max_length = 60
 
 
 async def process():
+
+    redis_stream_client = await get_stream_redis()
+    redis_inner_client = await get_inner_redis()
+
+    connections =  await get_connections('initialFeed_audio',redis_stream_client)
+    connection_ids = [c.replace('initialFeed_audio:','') for c in connections]
+
+    #connection_id??
     await writestream2file(connection_id,redis_stream_client)
     print(start)
     if on_start:  audio_slicer = await AudioSlicer.from_file(path,format = 'webm')
-    else       :  audio_slicer = await AudioSlicer.from_ffmpeg_slice(path,start,length)
+    else       :  audio_slicer = await AudioSlicer.from_ffmpeg_slice(path,start,max_length)
 
     slice_duration = audio_slicer.audio.duration_seconds
     print(slice_duration)
 
-    if slice_duration > length:
+    if slice_duration > min_length:
 
         audio_data = await audio_slicer.export_data()
         audio_name = str(uuid.uuid4())
         audio = Audio(chunk_name=audio_name, redis_client=redis_inner_client, data=audio_data)
         await audio.save()
 
-    diarization_result = await diarize(client_id,audio_name,start)
-
-    transcription_result = await transcribe(audio_name)
+    diarization_result, transcription_result = await asyncio.gather(
+            diarize(client_id, audio_name, start),
+            transcribe(audio_name)
+        )
     df = pd.merge_asof(transcription_result,diarization_result,left_on = 'start',right_on='time',direction='nearest')
     df['speaker_change'] = df['speaker'] != df['speaker'].shift()
     df['silence'] = df['start']-df['end'].shift()
@@ -126,8 +133,14 @@ async def process():
     df['len'] = df['end'] - df['start']
     df['speaker'] = np.where(df['len']>0.5,df['speaker'],np.nan)
     df['speaker'] = df['speaker'].fillna(method='ffill').fillna(method='bfill')
-    return df
 
 
+    await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps(df.to_dict(orient='records')))
+    await redis_inner_client.lpush(f'Start:{connection_id}', json.dumps(df.to_dict(orient='records')))
 
-process()
+
+while True:
+     
+
+
+asyncio.run(process())

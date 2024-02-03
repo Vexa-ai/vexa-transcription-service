@@ -64,27 +64,28 @@ def parse_segment(segment):
     return segment[0].start, segment[0].end,int(segment[-1].split('_')[1])
 
 async def process(redis_client):
-    # try:
-    _,item = await redis_client.brpop('Audio2DiarizeQueue')
-    audio_name,client_id = item.split(':')
-    create_collection_ifnotexists(client_id)
-    audio = Audio(audio_name,redis_client)
-    #diarization = Diarisation(audio_name,redis_client)
-    if await audio.get():
-        print('here')
-        output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
-        if len(embeddings)==0: audio.delete()
-    speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
-    segments = [i for i in output.itertracks(yield_label=True)]
-    df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker'])
-    df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
-    diarization_data = df.to_dict('records')
-    await Diarisation(audio_name,redis_client,diarization_data).save()
-    print('done')
-    # except Exception as e:
-    #     print(e)
-    # finally:
-    await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
+    try:
+        _,item = await redis_client.brpop('Audio2DiarizeQueue')
+        audio_name,client_id = item.split(':')
+        create_collection_ifnotexists(client_id)
+        audio = Audio(audio_name,redis_client)
+        #diarization = Diarisation(audio_name,redis_client)
+        if await audio.get():
+            print('here')
+            output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
+            if len(embeddings)==0: audio.delete()
+        speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
+        segments = [i for i in output.itertracks(yield_label=True)]
+        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker'])
+        df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
+        diarization_data = df.to_dict('records')
+        await Diarisation(audio_name,redis_client,diarization_data).save()
+        await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
+        print('done')
+    except Exception as e:
+        print(e)
+        await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
+    
 
 
 async def main():
