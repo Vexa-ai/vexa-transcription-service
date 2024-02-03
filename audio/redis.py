@@ -13,7 +13,8 @@ try:
     import redis
     import json
     import pandas as pd
-except:
+except Exception as e:
+    print(e)
     pass
 
 

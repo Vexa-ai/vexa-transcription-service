@@ -104,8 +104,11 @@ async def process_connection_queue(connection_id: str):
             start_ = await get_next_chunk_start(diarization_result,slice_duration)
             start = start_ if start_ else start+length
 
-        else:
+        elif slice_duration > length and length == 0:
             break
+        
+        else:
+            length = 0
         
 
         
