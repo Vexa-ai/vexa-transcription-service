@@ -40,7 +40,7 @@ async def get_next_chunk_start(redis_inner_client, audio_name, length,shift):
 
         ended_silence = length - last_speech['end']
         print(ended_silence)
-        if ended_silence<1:
+        if ended_silence<2:
             print('interrupted')
             return last_speech['start']+shift
         
@@ -62,6 +62,7 @@ async def diarize(client_id, audio_name, shift, redis_inner_client):
     await diarization.get()
     df = pd.DataFrame(diarization.data)
     df['len'] = df['end'] - df['start']
+    df = df[df['len']>0.7]
 
     if len(df)>0:
         expanded_df = pd.DataFrame(columns=['speaker', 'time'])
@@ -127,7 +128,6 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         df['speaker_change'] = df['speaker_change'].cumsum()
         df = df.groupby('speaker_change').agg({'speaker': 'first', 'start': 'first', 'end': 'last'}).join(df.groupby('speaker_change').apply(lambda x:''.join(x['word'])).to_frame('text'))
         df['len'] = df['end'] - df['start']
-        df['speaker'] = np.where(df['len']>0.5,df['speaker'],np.nan)
         df['speaker'] = df['speaker'].fillna(method='ffill').fillna(method='bfill')
         df['conv_start'] = df['start']+start
         df['conv_end'] = df['end']+start
@@ -141,6 +141,8 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
 
     else:
         await redis_inner_client.lpush(f'Start:{connection_id}', start)
+
+    running_tasks.remove(connection_id)
 
 def task_completed(task, connection_id):
     running_tasks.remove(connection_id)
