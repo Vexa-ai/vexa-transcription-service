@@ -9,7 +9,7 @@ from audio.redis import *
 import asyncio
 import torch
 
-client = QdrantClient("qdrant")
+client = QdrantClient("qdrant",timeout=10)
 
 
 
@@ -66,12 +66,11 @@ def parse_segment(segment):
 async def process(redis_client):
     try:
         _,item = await redis_client.brpop('Audio2DiarizeQueue')
+        print('here')
         audio_name,client_id = item.split(':')
         create_collection_ifnotexists(client_id)
         audio = Audio(audio_name,redis_client)
-        #diarization = Diarisation(audio_name,redis_client)
         if await audio.get():
-            print('here')
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings)==0: audio.delete()
         speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
