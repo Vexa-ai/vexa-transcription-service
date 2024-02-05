@@ -75,11 +75,12 @@ async def process(redis_client):
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings)==0: audio.delete()
-        speakers =[process_speaker_emb(e,client_id)[0] for e in embeddings]
+        speakers =[process_speaker_emb(e,client_id) for e in embeddings]
         segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker'])
-        df['speaker'] = df['speaker'].replace({i:s for i,s in enumerate(speakers)})
-        diarization_data = df.to_dict('records')
+        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
+        df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
+        df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
+        diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
         await Diarisation(audio_name,redis_client,diarization_data).save()
         await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
         print('done')

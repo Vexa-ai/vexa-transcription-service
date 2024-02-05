@@ -76,7 +76,7 @@ async def transcribe(audio_name, redis_inner_client):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=20,max_length=120):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=50,max_length=120):
     path = f'/app/testdata/{connection_id}.webm'
 
     redis_stream_client = await get_stream_redis()
