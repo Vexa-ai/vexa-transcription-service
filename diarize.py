@@ -1,10 +1,8 @@
-from qdrant_client.http.models import Distance, VectorParams
-from qdrant_client.http.models import PointStruct
+from qdrant_client import QdrantClient, models
 from uuid import uuid4
 from pyannote.audio import Pipeline
 import io
 import pandas as pd
-from qdrant_client import QdrantClient
 from audio.redis import *
 import asyncio
 import torch
@@ -13,30 +11,35 @@ client = QdrantClient("qdrant",timeout=10)
 
 
 
-
 def get_stored_knn(emb:list, client_id):
     search_result = client.search(
-        collection_name=client_id, query_vector=emb, limit=1)
+        collection_name='main', 
+        query_vector=emb, 
+        limit=1,
+        query_filter=models.Filter(
+        must=[
+            models.FieldCondition(
+                key="client_id",
+                match=models.MatchValue(
+                    value=client_id,
+                ),
+            )
+        ]
+    ),  
+        )
     if len(search_result)>0:
         search_result = search_result[0]
         return search_result.payload['speaker_id'], search_result.score
     else: return None,None
 
-def create_collection_ifnotexists(client_id):
-    if not client_id in [c.name for c in client.get_collections().collections]:
-        client.create_collection(
-            collection_name=client_id,
-            vectors_config=VectorParams(size=256, distance=Distance.COSINE),
-        )
-
 
 def add_new_speaker_emb(emb:list,client_id,speaker_id=None):
     speaker_id = speaker_id if speaker_id else str(uuid4())
 
-    operation_info = client.upsert(
-        collection_name=client_id,
+    client.upsert(
+        collection_name='main',
         wait=True,
-        points=[PointStruct(id=str(uuid4()), vector=emb,payload={'speaker_id':speaker_id})]
+        points=[models.PointStruct(id=str(uuid4()), vector=emb,payload={'speaker_id':speaker_id,'client_id':client_id})]
 
     )
 
@@ -68,7 +71,6 @@ async def process(redis_client):
         _,item = await redis_client.brpop('Audio2DiarizeQueue')
         print('here')
         audio_name,client_id = item.split(':')
-        create_collection_ifnotexists(client_id)
         audio = Audio(audio_name,redis_client)
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
