@@ -48,6 +48,7 @@ async def get_next_chunk_start(redis_inner_client, audio_name, length,shift):
 
         else:
             print('non-interrupted') 
+            
             return last_speech['end']+shift
 
 
@@ -76,7 +77,7 @@ async def transcribe(audio_name, redis_inner_client):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=20,max_length=120):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=10,max_length=120):
     path = f'/app/testdata/{connection_id}.webm'
 
     redis_stream_client = await get_stream_redis()
@@ -103,7 +104,7 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
                 diarize(client_id, audio_name, start,redis_inner_client),
                 transcribe(audio_name,redis_inner_client)
             )
-        
+        print('pushed')
         await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps((diarization_result, transcription_result,start)))
 
         start_ = await get_next_chunk_start(redis_inner_client, audio_name, slice_duration,start)
@@ -128,7 +129,7 @@ async def check_and_process_connections():
     while True:
         connections = await get_connections('initialFeed_audio', redis_stream_client)
         connection_ids = [c.replace('initialFeed_audio:', '') for c in connections]
-       # connection_ids.append('f7392735-93c1-47d8-83ae-00524eaff239')
+        # connection_ids.append('1eebcf5d-4981-42af-b1ee-26ac6d275fb6--0')
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
                 try:

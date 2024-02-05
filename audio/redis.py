@@ -22,14 +22,14 @@ except Exception as e:
 async def get_inner_redis():
     
     db = await aioredis.from_url(
-            "redis://redis/0",decode_responses=True
+            "redis://redis:6379",decode_responses=True
         )
 
     await db.ping()
 
     return db
 
-# %% ../nbs/00_redis.ipynb 7
+# %% ../nbs/00_redis.ipynb 8
 async def get_stream_redis(host = 'host.docker.internal'):
     
     db = await aioredis.from_url(
@@ -40,7 +40,7 @@ async def get_stream_redis(host = 'host.docker.internal'):
 
     return db
 
-# %% ../nbs/00_redis.ipynb 10
+# %% ../nbs/00_redis.ipynb 11
 async def get_connections_df(name, redis_client, min_length=1, pattern='*'):
     """
     Finds queues that match a given pattern and have a minimum number of items,
@@ -64,7 +64,7 @@ async def get_connections_df(name, redis_client, min_length=1, pattern='*'):
     return pd.DataFrame(data)
 
 
-# %% ../nbs/00_redis.ipynb 11
+# %% ../nbs/00_redis.ipynb 12
 async def get_connections(name, redis_client, min_length=1, pattern='*'):
     """
     Finds queues that match a given pattern and have a minimum number of items,
@@ -81,7 +81,7 @@ async def get_connections(name, redis_client, min_length=1, pattern='*'):
 
     return matching_queues
 
-# %% ../nbs/00_redis.ipynb 15
+# %% ../nbs/00_redis.ipynb 16
 class StreamItem(BaseModel):
     chunk: bytes
     timestamp: Optional[str] = None
@@ -103,7 +103,7 @@ class StreamItem(BaseModel):
         return cls(chunk=bytes.fromhex(item['chunk']), timestamp=item['timestamp'])
 
 
-# %% ../nbs/00_redis.ipynb 16
+# %% ../nbs/00_redis.ipynb 17
 class ApiConnection:
     """
     connection to initial chrome extention feed
@@ -170,7 +170,7 @@ class ApiConnection:
 
 
 
-# %% ../nbs/00_redis.ipynb 17
+# %% ../nbs/00_redis.ipynb 18
 @dataclass
 class Data:
     chunk_name:str

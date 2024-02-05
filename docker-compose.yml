@@ -1,34 +1,34 @@
 version: '3.8'
 
 services:
-  # diarize:
-  #   command: tail -f /dev/null
-  #   #command: ['python3','/app/diarize.py']
+  diarize:
+    #command: tail -f /dev/null
+    command: ['python3','/app/diarize.py']
 
-  #   build:
-  #     context: docker
-  #     dockerfile: DiarizeDockerfile
-  #   # image: diarize:0.1
-  #   #image: transcribe:0.0
-  #   restart: unless-stopped
-  #   runtime: nvidia
-  #   volumes:
-  #   - .:/app
-  #   - ${DATA_PATH}/audio:/audio
-  #   - /var/run/docker.sock:/var/run/docker.sock
+    build:
+      context: docker
+      dockerfile: DiarizeDockerfile
+    # image: diarize:0.1
+    #image: transcribe:0.0
+    restart: unless-stopped
+    runtime: nvidia
+    volumes:
+    - .:/app
+    - ${DATA_PATH}/audio:/audio
+    - /var/run/docker.sock:/var/run/docker.sock
 
-  #   depends_on:
-  #     - qdrant
+    depends_on:
+      - qdrant
 
   transcribe:
-   # command: ['python3','/app/transcribe.py']
+    command: ['python3','/app/transcribe.py']
 
-    command: tail -f /dev/null
+    #command: tail -f /dev/null
 
     # build:
       # context: docker
       # dockerfile: TranscribeDockerfile
-    image: transcribe:0.0
+    image: transcribe:0.1
     restart: unless-stopped
     runtime: nvidia
     volumes:
