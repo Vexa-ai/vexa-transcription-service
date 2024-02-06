@@ -77,7 +77,7 @@ async def transcribe(audio_name, redis_inner_client):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=10,max_length=120):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=30,max_length=120):
     path = f'/app/testdata/{connection_id}.webm'
 
     redis_stream_client = await get_stream_redis()
@@ -129,7 +129,7 @@ async def check_and_process_connections():
     while True:
         connections = await get_connections('initialFeed_audio', redis_stream_client)
         connection_ids = [c.replace('initialFeed_audio:', '') for c in connections]
-        # connection_ids.append('1eebcf5d-4981-42af-b1ee-26ac6d275fb6--0')
+       # connection_ids.append('1eebcf5d-4981-42af-b1ee-26ac6d275fb6--0')
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
                 try:
