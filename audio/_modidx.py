@@ -61,4 +61,5 @@ d = { 'settings': { 'branch': '{branch}',
                              'audio.redis.get_connections': ('redis.html#get_connections', 'audio/redis.py'),
                              'audio.redis.get_connections_df': ('redis.html#get_connections_df', 'audio/redis.py'),
                              'audio.redis.get_inner_redis': ('redis.html#get_inner_redis', 'audio/redis.py'),
-                             'audio.redis.get_stream_redis': ('redis.html#get_stream_redis', 'audio/redis.py')}}}
+                             'audio.redis.get_stream_redis': ('redis.html#get_stream_redis', 'audio/redis.py'),
+                             'audio.redis.start_process_audio_file': ('redis.html#start_process_audio_file', 'audio/redis.py')}}}

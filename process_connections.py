@@ -116,9 +116,20 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
 
     running_tasks.remove(connection_id)
 
-def task_completed(task, connection_id):
-    if connection_id in running_tasks: running_tasks.remove(connection_id)
+async def task_completed(connection_id,redis_inner_client):
+    if connection_id in running_tasks: 
+        running_tasks.remove(connection_id)
+        await redis_inner_client.srem(f'Processfromfile',connection_id)
     print(f"Task for {connection_id} completed")
+
+async def task_wrapper(task, connection_id,redis_inner_client):
+    # This wrapper will now await the task_completed function
+    await task_completed(task, connection_id,redis_inner_client)
+
+def callback(task, connection_id,redis_inner_client):
+    # asyncio.create_task() is used to schedule the execution of task_wrapper
+    # Since callback can't directly await task_wrapper, we ensure it's scheduled to run in the event loop
+    asyncio.create_task(task_wrapper(task, connection_id,redis_inner_client))
 
 
 
@@ -129,13 +140,15 @@ async def check_and_process_connections():
     while True:
         connections = await get_connections('initialFeed_audio', redis_stream_client)
         connection_ids = [c.replace('initialFeed_audio:', '') for c in connections]
-       # connection_ids.append('1eebcf5d-4981-42af-b1ee-26ac6d275fb6--0')
+        files = await redis_inner_client.smembers(f'Processfromfile')
+        if len(files)>0: connection_ids.extend(list(files))  
+        else: pass
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
                 try:
                     running_tasks.add(connection_id)
                     task = asyncio.create_task(process_connection(connection_id, redis_stream_client, redis_inner_client))
-                    task.add_done_callback(lambda t, cid=connection_id: task_completed(t, cid))
+                    task.add_done_callback(lambda t, cid=connection_id: asyncio.create_task(task_completed(cid, redis_inner_client)))
                 except:
                     pass
         #await asyncio.sleep(1)  # Wait for a bit before checking for new connections again
