@@ -31,10 +31,7 @@ running_tasks = set()
 
 
 
-async def get_next_chunk_start(redis_inner_client, audio_name, length,shift):
-    diarization = Diarisation(audio_name, redis_inner_client)
-    await diarization.get()
-    diarization_result = diarization.data
+async def get_next_chunk_start(diarization_result, length,shift):
 
     if len(diarization_result)>0:
         last_speech = diarization_result[-1]
@@ -78,6 +75,8 @@ async def transcribe(audio_name, redis_inner_client):
 
 
 async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=30,max_length=120):
+    running_tasks.add(connection_id)
+    
     path = f'/app/testdata/{connection_id}.webm'
 
     redis_stream_client = await get_stream_redis()
@@ -100,37 +99,29 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         audio = Audio(chunk_name=audio_name, redis_client=redis_inner_client, data=audio_data)
         await audio.save()
 
+        print('processing',connection_id)
         diarization_result, transcription_result = await asyncio.gather(
                 diarize(client_id, audio_name, start,redis_inner_client),
                 transcribe(audio_name,redis_inner_client)
             )
-        print('pushed')
+        print('processing finished',connection_id)
+        
         await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps((diarization_result, transcription_result,start)))
-
-        start_ = await get_next_chunk_start(redis_inner_client, audio_name, slice_duration,start)
+        
+        start_ = await get_next_chunk_start(diarization_result, slice_duration,start)
         start = start_ if start_ else start+slice_duration
+        print('start')
         await redis_inner_client.lpush(f'Start:{connection_id}', start)
-
     else:
         await redis_inner_client.lpush(f'Start:{connection_id}', start)
 
-    running_tasks.remove(connection_id)
+
+        await redis_inner_client.srem(f'Processfromfile',connection_id)
 
 async def task_completed(connection_id,redis_inner_client):
     if connection_id in running_tasks: 
         running_tasks.remove(connection_id)
-        await redis_inner_client.srem(f'Processfromfile',connection_id)
     print(f"Task for {connection_id} completed")
-
-async def task_wrapper(task, connection_id,redis_inner_client):
-    # This wrapper will now await the task_completed function
-    await task_completed(task, connection_id,redis_inner_client)
-
-def callback(task, connection_id,redis_inner_client):
-    # asyncio.create_task() is used to schedule the execution of task_wrapper
-    # Since callback can't directly await task_wrapper, we ensure it's scheduled to run in the event loop
-    asyncio.create_task(task_wrapper(task, connection_id,redis_inner_client))
-
 
 
 async def check_and_process_connections():
@@ -145,12 +136,15 @@ async def check_and_process_connections():
         else: pass
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
+                print(connection_id)
                 try:
                     running_tasks.add(connection_id)
+                    print('running_tasks', running_tasks)
                     task = asyncio.create_task(process_connection(connection_id, redis_stream_client, redis_inner_client))
                     task.add_done_callback(lambda t, cid=connection_id: asyncio.create_task(task_completed(cid, redis_inner_client)))
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Error processing connection {connection_id}: {e}")
+                    running_tasks.remove(connection_id)
         #await asyncio.sleep(1)  # Wait for a bit before checking for new connections again
 
 async def main():

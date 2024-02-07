@@ -75,6 +75,8 @@ async def process(redis_client):
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings)==0: audio.delete()
+        else:
+            assert 'no audio'
         speakers =[process_speaker_emb(e,client_id) for e in embeddings]
         segments = [i for i in output.itertracks(yield_label=True)]
         df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
