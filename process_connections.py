@@ -18,7 +18,7 @@ import numpy as np
 import json
 import time
 
-client_id = '851f343e-4954-4f0a-8835-9664cc91c181'
+
 import subprocess
 from pydub import AudioSegment
 import io
@@ -64,7 +64,7 @@ async def diarize(client_id, audio_name, shift, redis_inner_client):
     
 
 
-async def transcribe(audio_name, redis_inner_client):
+async def transcribe(audio_name, redis_inner_client,client_id):
     await redis_inner_client.lpush('Audio2TranscribeQueue', f'{audio_name}:{client_id}')
     _,done = await redis_inner_client.brpop(f'TranscribeReady:{audio_name}')
     transcription =  Transcript(audio_name,redis_inner_client)
@@ -89,6 +89,13 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
     await writestream2file(connection_id,redis_stream_client)
     audio_slicer = await AudioSlicer.from_ffmpeg_slice(path,start,start+max_length)
 
+
+    client_id = await redis_stream_client.hget('connection_client_map',connection_id)
+
+    print('from here', client_id)
+
+    assert client_id is not None
+
     slice_duration = audio_slicer.audio.duration_seconds
     print(slice_duration)
 
@@ -102,7 +109,7 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         print('processing',connection_id)
         diarization_result, transcription_result = await asyncio.gather(
                 diarize(client_id, audio_name, start,redis_inner_client),
-                transcribe(audio_name,redis_inner_client)
+                transcribe(audio_name,redis_inner_client,client_id)
             )
         print('processing finished',connection_id)
         
