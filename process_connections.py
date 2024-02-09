@@ -138,9 +138,9 @@ async def check_and_process_connections():
     while True:
         connections = await get_connections('initialFeed_audio', redis_stream_client)
         connection_ids = [c.replace('initialFeed_audio:', '') for c in connections]
-        files = await redis_inner_client.smembers(f'Processfromfile')
-        if len(files)>0: connection_ids.extend(list(files))  
-        else: pass
+        # files = await redis_inner_client.smembers(f'Processfromfile')
+        # if len(files)>0: connection_ids.extend(list(files))  
+        #else: pass
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
                 print(connection_id)

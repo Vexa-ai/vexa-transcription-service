@@ -36,7 +36,8 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
-    command: tail -f /dev/null
+   # command: tail -f /dev/null
+    command: ['python','/app/process_connections.py']
 
     #build: 
       # context: docker
