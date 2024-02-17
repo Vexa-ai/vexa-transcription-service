@@ -1,16 +1,3 @@
-### build pgvector 
-
-https://github.com/pgvector/pgvector
-
-
-```
-git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git
-cd pgvector
-docker build --build-arg PG_MAJOR=15 -t myuser/pgvector .```
-
-`engine_execute('CREATE EXTENSION vector;')`
-
-
 
 https://github.com/pyannote/pyannote-audio/issues/1563
 
@@ -18,4 +5,13 @@ https://github.com/pyannote/pyannote-audio/issues/1563
 torch==2.0.1
 pyannote-audio==3.1.0
 ```
+
+### ways to improve diarization 
+
+- pass speaker embeddings to the main engine and build similarizy matrix of all the participants to find the redundunt speakers. Those might be that spoke a little and have embedding similar to one of the main vectors
+
+- clean up oversapped speakers 
+
+- check if start/end of diarization segments well align with transctiption and find out why not
+
 
