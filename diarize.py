@@ -6,6 +6,7 @@ import pandas as pd
 from audio.redis import *
 import asyncio
 import torch
+import json
 
 client = QdrantClient("qdrant",timeout=10)
 
@@ -33,7 +34,8 @@ def get_stored_knn(emb:list, client_id):
     else: return None,None
 
 
-def add_new_speaker_emb(emb:list,client_id,speaker_id=None):
+async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
+    print('adding new speaker')
     speaker_id = speaker_id if speaker_id else str(uuid4())
 
     client.upsert(
@@ -43,22 +45,24 @@ def add_new_speaker_emb(emb:list,client_id,speaker_id=None):
 
     )
 
+    await redis_client.lpush('Embeddings', json.dumps((speaker_id,emb.tolist(), client_id)))
+    
     return speaker_id
 
 
 
-def process_speaker_emb(emb:list,client_id):
+async def process_speaker_emb(emb:list,redis_client, client_id):
     speaker_id, score = get_stored_knn(emb, client_id)
     print(score)
     if speaker_id:
         if score > 0.95:
             pass
         elif score > 0.71:
-            add_new_speaker_emb(emb,client_id,speaker_id=speaker_id)
+            await add_new_speaker_emb(emb,redis_client, client_id,speaker_id=speaker_id)
         else:
-            speaker_id = add_new_speaker_emb(emb,client_id)
+            speaker_id = await add_new_speaker_emb(emb,redis_client, client_id)
     else:
-        speaker_id = add_new_speaker_emb(emb,client_id)
+        speaker_id = await add_new_speaker_emb(emb,redis_client, client_id)
 
     return str(speaker_id), score
 
@@ -77,7 +81,7 @@ async def process(redis_client):
             if len(embeddings)==0: audio.delete()
         else:
             assert 'no audio'
-        speakers =[process_speaker_emb(e,client_id) for e in embeddings]
+        speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
         segments = [i for i in output.itertracks(yield_label=True)]
         df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
         df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})

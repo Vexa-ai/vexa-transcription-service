@@ -91,9 +91,6 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
 
 
     client_id = await redis_stream_client.hget('connection_client_map',connection_id)
-
-    print('from here', client_id)
-
     assert client_id is not None
 
     slice_duration = audio_slicer.audio.duration_seconds
