@@ -24,7 +24,6 @@ from pydub import AudioSegment
 import io
 from time import sleep
 
-from audio.redis import Transcript
 
 running_tasks = set()
 
@@ -79,8 +78,8 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
     
     path = f'/app/testdata/{connection_id}.webm'
 
-    redis_stream_client = await get_stream_redis()
-    redis_inner_client  = await get_inner_redis()
+    redis_stream_client = await get_redis('host.docker.internal',6380)
+    redis_inner_client  = await get_redis('redis',6379)
 
     start = await redis_inner_client.rpop(f'Start:{connection_id}')
     start = float(start) if start else 0
@@ -129,8 +128,8 @@ async def task_completed(connection_id,redis_inner_client):
 
 
 async def check_and_process_connections():
-    redis_stream_client = await get_stream_redis()
-    redis_inner_client = await get_inner_redis()
+    redis_stream_client = await get_redis('host.docker.internal', port=6380)
+    redis_inner_client = await get_redis('redis', port=6379)
 
     while True:
         connections = await get_connections('initialFeed_audio', redis_stream_client)
