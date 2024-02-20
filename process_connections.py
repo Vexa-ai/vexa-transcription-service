@@ -73,7 +73,7 @@ async def transcribe(audio_name, redis_inner_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=30,max_length=120):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=120,max_length=240):
     running_tasks.add(connection_id)
     
     path = f'/app/testdata/{connection_id}.webm'
