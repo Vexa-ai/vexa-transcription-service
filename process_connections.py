@@ -73,7 +73,7 @@ async def transcribe(audio_name, redis_inner_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=120,max_length=240):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=60,max_length=240):
     running_tasks.add(connection_id)
     
     path = f'/app/testdata/{connection_id}.webm'
@@ -102,19 +102,31 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         audio = Audio(chunk_name=audio_name, redis_client=redis_inner_client, data=audio_data)
         await audio.save()
 
-        print('processing',connection_id)
-        diarization_result, transcription_result = await asyncio.gather(
-                diarize(client_id, audio_name, start,redis_inner_client),
-                transcribe(audio_name,redis_inner_client,client_id)
-            )
-        print('processing finished',connection_id)
-        
-        await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps((diarization_result, transcription_result,start)))
-        
-        start_ = await get_next_chunk_start(diarization_result, slice_duration,start)
-        start = start_ if start_ else start+slice_duration
-        print('start')
-        await redis_inner_client.lpush(f'Start:{connection_id}', start)
+        # print('processing',connection_id)
+        # diarization_result, transcription_result = await asyncio.gather(
+        #         diarize(client_id, audio_name, start,redis_inner_client),
+        #         transcribe(audio_name,redis_inner_client,client_id)
+        #     )
+        while True:
+            try:
+                diarization_result, transcription_result = await asyncio.gather(
+                    asyncio.wait_for(diarize(client_id, audio_name, start, redis_inner_client), timeout=60),  # Timeout after 60 seconds
+                    asyncio.wait_for(transcribe(audio_name, redis_inner_client, client_id), timeout=60)  # Timeout after 60 seconds
+                )
+            except asyncio.TimeoutError:
+                print("A task has timed out")
+            else:
+
+                print('processing finished',connection_id)
+                
+                await redis_inner_client.lpush(f'Segment:{connection_id}', json.dumps((diarization_result, transcription_result,start)))
+                
+                start_ = await get_next_chunk_start(diarization_result, slice_duration,start)
+                start = start_ if start_ else start+slice_duration
+                print('start')
+                await redis_inner_client.lpush(f'Start:{connection_id}', start)
+
+                break
     else:
         await redis_inner_client.lpush(f'Start:{connection_id}', start)
 

@@ -2,7 +2,8 @@ from qdrant_client import QdrantClient, models
 
 client = QdrantClient("qdrant")
 
-client.delete_collection(client.get_collections().collections[0].name)
+if len(client.get_collections().collections)>0:
+    client.delete_collection(client.get_collections().collections[0].name)
 
 
 client.create_collection(

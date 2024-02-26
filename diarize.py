@@ -9,8 +9,7 @@ import torch
 import json
 
 client = QdrantClient("qdrant",timeout=10)
-
-
+#client = QdrantClient("host.docker.internal",timeout=10,port=6333)
 
 def get_stored_knn(emb:list, client_id):
     search_result = client.search(
@@ -57,7 +56,7 @@ async def process_speaker_emb(emb:list,redis_client, client_id):
     if speaker_id:
         if score > 0.95:
             pass
-        elif score > 0.71:
+        elif score > 0.75:
             await add_new_speaker_emb(emb,redis_client, client_id,speaker_id=speaker_id)
         else:
             speaker_id = await add_new_speaker_emb(emb,redis_client, client_id)

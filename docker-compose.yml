@@ -21,8 +21,7 @@ services:
 
   transcribe:
     command: ['python3','/app/transcribe.py']
-
-   # command: tail -f /dev/null
+    #command: tail -f /dev/null
 
     # build:
       # context: docker
