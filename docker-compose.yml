@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   diarize:
-    command: tail -f /dev/null
-    #command: ['python3','/app/diarize.py']
+    #command: tail -f /dev/null
+    command: ['python3','/app/diarize.py']
 
     build:
       context: docker
@@ -36,8 +36,8 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
-    command: tail -f /dev/null
-    #command: ['python','/app/process_connections.py']
+    #command: tail -f /dev/null
+    command: ['python','/app/process_connections.py']
 
     #build: 
       # context: docker
