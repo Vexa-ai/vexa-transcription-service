@@ -79,7 +79,7 @@ async def transcribe(audio_name, redis_inner_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=60,max_length=240):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=120,max_length=240):
     running_tasks.add(connection_id)
     
     path = f'/audio/{connection_id}.webm'
@@ -176,3 +176,7 @@ async def main():
 if __name__ == '__main__':
     asyncio.run(main())
 
+#test
+    
+
+    
