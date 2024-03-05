@@ -3,7 +3,7 @@ version: '3.8'
 services:
   diarize:
     #command: tail -f /dev/null
-    command: ['python3','/app/diarize.py']
+    command: ['python3','diarize.py']
 
     build:
       context: docker
@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/app
+    - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
 
@@ -20,7 +20,7 @@ services:
       - qdrant
 
   transcribe:
-    command: ['python3','/app/transcribe.py']
+    command: ['python3','transcribe.py']
     #command: tail -f /dev/null
 
     # build:
@@ -30,13 +30,13 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/app
+    - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
     #command: tail -f /dev/null
-    command: ['python','/app/process_connections.py']
+    command: ['python','process_connections.py']
 
     #build: 
       # context: docker
@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/app
+    - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
     - /var/run/docker.sock:/var/run/docker.sock
 
@@ -64,6 +64,9 @@ services:
     image: redis:latest
     restart: unless-stopped
     ports:
-      - "6381:6379" #needs to be exposed outside for remote connection of the main server
+      - "${REDIS_PORT}:6379" #needs to be exposed outside for remote connection of the main server
     volumes:
     - ${DATA_PATH}/docker_redis_audio:/data
+
+
+ #docker-compose -f /home/dima/1/1_audio/docker-compose.yml -p 11 up -d

@@ -81,7 +81,7 @@ class AudioSlicer:
 
 # %% ../nbs/00_audio.ipynb 4
 async def writestream2file(conn_id,redis_client):
-    path = f'/app/testdata/{conn_id}.webm'
+    path = f'/audio/{conn_id}.webm'
     item = True
     while item:
         item = await redis_client.rpop(f'initialFeed_audio:{conn_id}')

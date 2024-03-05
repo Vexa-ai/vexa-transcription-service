@@ -24,10 +24,16 @@ from pydub import AudioSegment
 import io
 from time import sleep
 
+from dotenv import load_dotenv
+import os
+load_dotenv()
+STREAM_REDIS_PORT = os.getenv('STREAM_REDIS_PORT')
+DATA_PATH = os.getenv('DATA_PATH')
+
+
+
 
 running_tasks = set()
-
-
 
 
 async def get_next_chunk_start(diarization_result, length,shift):
@@ -73,12 +79,12 @@ async def transcribe(audio_name, redis_inner_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=120,max_length=240):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=60,max_length=240):
     running_tasks.add(connection_id)
     
-    path = f'/app/testdata/{connection_id}.webm'
+    path = f'/audio/{connection_id}.webm'
 
-    redis_stream_client = await get_redis('host.docker.internal',6380)
+    redis_stream_client = await get_redis('host.docker.internal',STREAM_REDIS_PORT)
     redis_inner_client  = await get_redis('redis',6379)
 
     start = await redis_inner_client.rpop(f'Start:{connection_id}')
@@ -140,7 +146,7 @@ async def task_completed(connection_id,redis_inner_client):
 
 
 async def check_and_process_connections():
-    redis_stream_client = await get_redis('host.docker.internal', port=6380)
+    redis_stream_client = await get_redis('host.docker.internal', port=STREAM_REDIS_PORT)
     redis_inner_client = await get_redis('redis', port=6379)
 
     while True:
