@@ -61,7 +61,7 @@ services:
   qdrant:
     image: qdrant/qdrant
     volumes:
-      - ${DATA_PATH}/qdrant:/qdrant/data
+      - ${DATA_PATH}/qdrant:/qdrant/storage
     restart: unless-stopped
 
 
