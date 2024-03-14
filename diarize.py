@@ -8,6 +8,8 @@ import asyncio
 import torch
 import json
 
+from audio.lib import log
+
 client = QdrantClient("qdrant",timeout=10)
 #client = QdrantClient("host.docker.internal",timeout=10,port=6333)
 
@@ -34,7 +36,7 @@ def get_stored_knn(emb:list, client_id):
 
 
 async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
-    print('adding new speaker')
+    log('adding new speaker')
     speaker_id = speaker_id if speaker_id else str(uuid4())
 
     client.upsert(
@@ -52,7 +54,7 @@ async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
 
 async def process_speaker_emb(emb:list,redis_client, client_id):
     speaker_id, score = get_stored_knn(emb, client_id)
-    print(score)
+    log(score)
     if speaker_id:
         if score > 0.95:
             pass
@@ -72,25 +74,26 @@ def parse_segment(segment):
 async def process(redis_client):
     try:
         _,item = await redis_client.brpop('Audio2DiarizeQueue')
-        print('here')
+        log('here')
         audio_name,client_id = item.split(':')
         audio = Audio(audio_name,redis_client)
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings)==0: audio.delete()
+            speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
+            segments = [i for i in output.itertracks(yield_label=True)]
+            df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
+            df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
+            df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
+            diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
+            await Diarisation(audio_name,redis_client,diarization_data).save()
+            await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
+            log('done')
         else:
             assert 'no audio'
-        speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
-        segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
-        df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
-        df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
-        diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
-        await Diarisation(audio_name,redis_client,diarization_data).save()
-        await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
-        print('done')
+        
     except Exception as e:
-        print(e)
+        log(e)
         await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
     
 
