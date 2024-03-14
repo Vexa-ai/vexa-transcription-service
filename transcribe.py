@@ -14,19 +14,20 @@ import time
 async def process(redis_client):
     try:
         _,item = await redis_client.brpop('Audio2TranscribeQueue')
-        print('received')
+        log('received')
         audio_name,client_id = item.split(':')
         audio = Audio(audio_name,redis_client)
         if await audio.get():
-            print('here')
+            log('here')
             segments, _ = model.transcribe(io.BytesIO(audio.data), beam_size=5,vad_filter=True,word_timestamps=True)
             segments = [s for s in list(segments)]
-            print('done')
+            log('done')
             transcription = [[w._asdict() for w in s.words] for s in segments]
             await Transcript(audio_name,redis_client,transcription).save()
             await redis_client.lpush(f'TranscribeReady:{audio_name}', 'Done')
+            log('done')
     except Exception as e:
-        print(e)
+        log(e)
         await redis_client.rpush('Audio2TranscribeQueue', f'{audio_name}:{client_id}')
 
 
@@ -48,8 +49,8 @@ async def main():
 if __name__ == '__main__':
     model_size = "large-v3"
     model = WhisperModel(model_size, device="cuda", compute_type="float16")
-    print('model loaded')
+    log('model loaded')
     
-    # print('test')
+    # log('test')
     asyncio.run(main())
 

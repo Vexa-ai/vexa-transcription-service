@@ -5,16 +5,18 @@ services:
     #command: tail -f /dev/null
     command: ['python3','diarize.py']
 
-    build:
-      context: docker
-      dockerfile: DiarizeDockerfile
-    #image: diarize:0.2
+    # build:
+    #   context: docker
+    #   dockerfile: DiarizeDockerfile
+    image: diarize:0.2
     restart: unless-stopped
     runtime: nvidia
     volumes:
     - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
+    - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
+    
 
     depends_on:
       - qdrant
@@ -32,6 +34,7 @@ services:
     volumes:
     - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
+    - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
@@ -47,6 +50,7 @@ services:
     volumes:
     - .:/usr/src/app
     - ${DATA_PATH}/audio:/audio
+    - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
 
     extra_hosts:

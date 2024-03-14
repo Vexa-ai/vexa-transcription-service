@@ -34,7 +34,7 @@ def get_stored_knn(emb:list, client_id):
 
 
 async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
-    print('adding new speaker')
+    log('adding new speaker')
     speaker_id = speaker_id if speaker_id else str(uuid4())
 
     client.upsert(
@@ -52,7 +52,7 @@ async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
 
 async def process_speaker_emb(emb:list,redis_client, client_id):
     speaker_id, score = get_stored_knn(emb, client_id)
-    print(score)
+    log(score)
     if speaker_id:
         if score > 0.95:
             pass
@@ -72,7 +72,7 @@ def parse_segment(segment):
 async def process(redis_client):
     try:
         _,item = await redis_client.brpop('Audio2DiarizeQueue')
-        print('here')
+        log('here')
         audio_name,client_id = item.split(':')
         audio = Audio(audio_name,redis_client)
         if await audio.get():
@@ -88,9 +88,9 @@ async def process(redis_client):
         diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
         await Diarisation(audio_name,redis_client,diarization_data).save()
         await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
-        print('done')
+        log('done')
     except Exception as e:
-        print(e)
+        log(e)
         await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
     
 
