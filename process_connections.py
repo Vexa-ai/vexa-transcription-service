@@ -24,8 +24,6 @@ from pydub import AudioSegment
 import io
 from time import sleep
 
-from audio.lib import log
-
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -81,7 +79,7 @@ async def transcribe(audio_name, redis_inner_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=60,max_length=240):
+async def process_connection(connection_id, redis_stream_client, redis_inner_client, step=120,max_length=240):
     running_tasks.add(connection_id)
     
     path = f'/audio/{connection_id}.webm'

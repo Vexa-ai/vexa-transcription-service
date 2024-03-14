@@ -8,8 +8,6 @@ import asyncio
 import torch
 import json
 
-from audio.lib import log
-
 client = QdrantClient("qdrant",timeout=10)
 #client = QdrantClient("host.docker.internal",timeout=10,port=6333)
 
@@ -80,18 +78,17 @@ async def process(redis_client):
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings)==0: audio.delete()
-            speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
-            segments = [i for i in output.itertracks(yield_label=True)]
-            df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
-            df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
-            df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
-            diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
-            await Diarisation(audio_name,redis_client,diarization_data).save()
-            await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
-            log('done')
         else:
             assert 'no audio'
-        
+        speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
+        segments = [i for i in output.itertracks(yield_label=True)]
+        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
+        df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
+        df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
+        diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
+        await Diarisation(audio_name,redis_client,diarization_data).save()
+        await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
+        log('done')
     except Exception as e:
         log(e)
         await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
