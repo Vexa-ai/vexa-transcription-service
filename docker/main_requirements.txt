@@ -4,3 +4,4 @@ pydub==0.25.1
 python-dotenv==1.0.1
 pandas==2.2.0
 qdrant-client==1.7.1
+ipykernel

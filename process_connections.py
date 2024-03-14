@@ -99,7 +99,7 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
     assert client_id is not None
 
     slice_duration = audio_slicer.audio.duration_seconds
-    log(slice_duration)
+    log('slice duaration ', slice_duration)
 
     if slice_duration > step:
 
@@ -115,6 +115,7 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         #     )
         while True:
             try:
+                log('gathering results from diarize and transcribe') 
                 diarization_result, transcription_result = await asyncio.gather(
                     asyncio.wait_for(diarize(client_id, audio_name, start, redis_inner_client), timeout=60),  # Timeout after 60 seconds
                     asyncio.wait_for(transcribe(audio_name, redis_inner_client, client_id), timeout=60)  # Timeout after 60 seconds
