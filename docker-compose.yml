@@ -61,7 +61,9 @@ services:
   qdrant:
     image: qdrant/qdrant
     volumes:
-      - ${DATA_PATH}/qdrant:/qdrant/storage
+
+    - ${DATA_PATH}/qdrant:/qdrant/storage
+
     restart: unless-stopped
 
 
@@ -74,4 +76,4 @@ services:
     - ${DATA_PATH}/docker_redis_audio:/data
 
 
- #docker compose -f /home/dima/0/1_audio/docker-compose.yml -p 01 up -d
+ #docker compose -f /home/dima/1/1_audio/docker-compose.yml -p 11 up -d
