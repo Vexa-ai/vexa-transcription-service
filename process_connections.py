@@ -84,9 +84,6 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
     
     path = f'/audio/{connection_id}.webm'
 
-    redis_stream_client = await get_redis('host.docker.internal',STREAM_REDIS_PORT)
-    redis_inner_client  = await get_redis('redis',6379)
-
     start = await redis_inner_client.rpop(f'Start:{connection_id}')
     start = float(start) if start else 0
     log('started at ',start)
