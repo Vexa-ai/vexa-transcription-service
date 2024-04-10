@@ -5,10 +5,10 @@ services:
     #command: tail -f /dev/null
     command: ['python3','diarize.py']
 
-    # build:
-    #   context: docker
-    #   dockerfile: DiarizeDockerfile
-    image: diarize:0.2
+    build:
+      context: docker
+      dockerfile: DiarizeDockerfile
+    #image: diarize:0.2
     restart: unless-stopped
     runtime: nvidia
     volumes:
@@ -26,9 +26,10 @@ services:
     command: ['python3','transcribe.py']
     #command: tail -f /dev/null
 
-    # build:
+    #build:
       # context: docker
       # dockerfile: TranscribeDockerfile
+      ### error  libcublas.so.12 is not found or cannot be loaded
     image: transcribe:0.1
     restart: unless-stopped
     runtime: nvidia
@@ -42,10 +43,10 @@ services:
     #command: tail -f /dev/null
     command: ['python','process_connections.py']
 
-    #build: 
-      # context: docker
-      # dockerfile: MainDockerfile
-    image: audio:0.2
+    build: 
+      context: docker
+      dockerfile: MainDockerfile
+    #image: audio:0.2
     restart: unless-stopped
     runtime: nvidia
     volumes:
@@ -74,6 +75,3 @@ services:
       - "${AUDIO_REDIS_PORT}:6379" #needs to be exposed outside for remote connection of the main server
     volumes:
     - ${DATA_PATH}/docker_redis_audio:/data
-
-
- #docker compose -f /home/dima/1/1_audio/docker-compose.yml -p 11 up -d
