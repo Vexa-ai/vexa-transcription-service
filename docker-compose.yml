@@ -13,6 +13,7 @@ services:
     runtime: nvidia
     volumes:
     - .:/usr/src/app
+    - ../library:/usr/src/library
     - ${DATA_PATH}/audio:/audio
     - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
@@ -35,13 +36,14 @@ services:
     runtime: nvidia
     volumes:
     - .:/usr/src/app
+    - ../library:/usr/src/library
     - ${DATA_PATH}/audio:/audio
     - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
-    #command: tail -f /dev/null
-    command: ['python','process_connections.py']
+    command: tail -f /dev/null
+    #command: ['python','process_connections.py']
 
     build: 
       context: docker
@@ -51,6 +53,7 @@ services:
     runtime: nvidia
     volumes:
     - .:/usr/src/app
+    - ../library:/usr/src/library
     - ${DATA_PATH}/audio:/audio
     - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
