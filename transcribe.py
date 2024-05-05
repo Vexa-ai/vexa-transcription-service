@@ -9,6 +9,10 @@ import json
 import asyncio
 
 import time
+import sys
+sys.path.insert(0,'../library')
+from vexa.tools import log
+from vexa.redis import get_redis
 
 
 async def process(redis_client):
@@ -32,17 +36,9 @@ async def process(redis_client):
 
 
 async def main():
-    redis_client = await get_inner_redis()
+    redis_client = await get_redis(host='redis',port=6379)
     while True:
-        
-    # try:
-    #     while True:
-    #         await process(redis_client)
-    # except KeyboardInterrupt:
-    #     pass 
-    # finally:
-    #     redis_client.close()
-
+    
         await process(redis_client)
 
 

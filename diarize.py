@@ -8,6 +8,11 @@ import asyncio
 import torch
 import json
 
+import sys
+sys.path.insert(0,'../library')
+from vexa.tools import log
+from vexa.redis import get_redis
+
 client = QdrantClient("qdrant",timeout=10)
 #client = QdrantClient("host.docker.internal",timeout=10,port=6333)
 
@@ -90,13 +95,13 @@ async def process(redis_client):
         await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
         log('done')
     except Exception as e:
-        log(e)
+        log(e,suf='feature')
         await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
     
 
 
 async def main():
-    redis_client = await get_inner_redis()
+    redis_client = await get_redis(host='redis',port=6379)
     try:
         while True:
             await process(redis_client)
