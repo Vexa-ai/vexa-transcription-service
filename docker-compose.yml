@@ -42,8 +42,8 @@ services:
     - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
-    command: tail -f /dev/null
-    #command: ['python','process_connections.py']
+    #command: tail -f /dev/null
+    command: ['python','process_connections.py']
 
     build: 
       context: docker
@@ -78,3 +78,26 @@ services:
       - "${AUDIO_REDIS_PORT}:6379" #needs to be exposed outside for remote connection of the main server
     volumes:
     - ${DATA_PATH}/docker_redis_audio:/data
+
+
+  api:
+    #image: stream_api
+    build: 
+      context: docker
+      dockerfile: MainDockerfile
+    ports:
+      - "${AUDIO_API_PORT}:${AUDIO_API_PORT}"
+    depends_on:
+      - redis
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN}
+
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "${AUDIO_API_PORT}", "--reload"]
+    #command: tail -f /dev/null
+    volumes:
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+    restart: unless-stopped
+
+    extra_hosts:
+        - "host.docker.internal:host-gateway"

@@ -95,7 +95,7 @@ async def process(redis_client):
         await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
         log('done')
     except Exception as e:
-        log(e,suf='feature')
+        log(e)
         await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
     
 

@@ -5,4 +5,5 @@ python-dotenv==1.0.1
 pandas==2.2.0
 qdrant-client==1.7.1
 ipykernel
-git+https://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:x-oauth-basic@github.com/DmitriyG228/vexa_lib#egg=vexa
+fastapi
+uvicorn

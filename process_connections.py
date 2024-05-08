@@ -51,12 +51,9 @@ DATA_PATH = os.getenv('DATA_PATH')
 SERVICE_TOKEN = os.getenv('SERVICE_TOKEN')
 
 
-
-
-
-
-
 running_tasks = set()
+
+
 async def get_next_chunk_start(diarization_result, length,shift):
 
     if len(diarization_result)>0:
@@ -160,11 +157,13 @@ async def process_connection(connection_id, redis_client, step=60,max_length=240
                 await audio.delete()
             except asyncio.TimeoutError:
                 log("A task has timed out")
+            except Exception as e:
+                log(e)
             else:
-
                 log('processing finished',connection_id)
                 
-                await redis_client.lpush(f'Segment:{connection_id}', json.dumps((diarization_result, transcription_result,start)))
+                await redis_client.lpush(f'Segments', json.dumps((meeting_id,diarization_result, transcription_result,start, start_timestamp,finish_timestamp,)))
+                log('finished segment',connection_id)
                 
                 start_ = await get_next_chunk_start(diarization_result, slice_duration,start)
                 start = start_ if start_ else start+slice_duration
