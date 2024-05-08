@@ -6,6 +6,7 @@ from audio.audio import AudioSlicer
 import uuid
 from vexa.tools import log
 from vexa.redis import get_redis
+import  vexa.streamapipy as stream
 from dotenv import load_dotenv
 import os
 
@@ -56,8 +57,6 @@ SERVICE_TOKEN = os.getenv('SERVICE_TOKEN')
 
 
 running_tasks = set()
-
-
 async def get_next_chunk_start(diarization_result, length,shift):
 
     if len(diarization_result)>0:
@@ -79,58 +78,10 @@ async def get_next_chunk_start(diarization_result, length,shift):
 
     else: return None
     
-async def get_connections():
-
-    url = f"http://host.docker.internal:{STREAM_API_PORT}/list_connections"
-    params = {
-            "service_token": SERVICE_TOKEN
-        }
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-
-    async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, headers=headers, timeout=2)
-    
-    return response.json()['connections']
-
-
-
-async def fetch_chunks(connection_id: str, num_chunks: int):
-    # Define the URL to your API endpoint
-    url = f"http://host.docker.internal:{STREAM_API_PORT}/get_next_chunks/{connection_id}"
-    
-    # Define the parameters
-    params = {
-        "service_token": SERVICE_TOKEN,
-        "num_chunks": num_chunks
-    }
-
-    # Use an asynchronous client from httpx
-    async with httpx.AsyncClient() as client:
-        try:
-            # Perform the GET request
-            response = await client.get(url, params=params)
-
-            # Check if the request was successful
-            if response.status_code == 200:
-                if response.json() == {'message': 'No more chunks available for this connection'}:
-                    print(response.json())
-                    return
-                else:
-                    return response.json()  # Return the JSON response from the API
-            else:
-                return {"error": "Failed to fetch chunks", "status_code": response.status_code, "details": response.text}
-        except httpx.RequestError as e:
-            return {"error": "An error occurred while requesting chunks", "exception": str(e)}
-
-
-
 async def writestream2file(connection_id):
     path = f'/audio/{connection_id}.webm'
     first_timestamp = None
-    items = await  fetch_chunks(connection_id,100)
+    items = await  stream.fetch_chunks(connection_id,100,SERVICE_TOKEN,STREAM_API_PORT)
 
     if items:
         for item in items['chunks']:
@@ -172,7 +123,7 @@ async def diarize(audio_name, redis_client,client_id):
 
 
 
-async def process_connection(connection_id, redis_client, step=10,max_length=240):
+async def process_connection(connection_id, redis_client, step=60,max_length=240):
     running_tasks.add(connection_id)
     
     path = f'/audio/{connection_id}.webm'
@@ -181,10 +132,10 @@ async def process_connection(connection_id, redis_client, step=10,max_length=240
     start = float(start) if start else 0
     log('started at ',start)
 
-    connection_output = await writestream2file(connection_id)
-    if connection_output:
-        meeting_id, start_timestamp,finish_timestamp, client_id = connection_output  
-        meeting_start = await get_meeting_start(meeting_id,start_timestamp,redis_client)
+    connection_meta = await writestream2file(connection_id)
+    if connection_meta:
+        meeting_id, start_timestamp,finish_timestamp, client_id = connection_meta  
+
     
     audio_slicer = await AudioSlicer.from_ffmpeg_slice(path,start,start+max_length)
     slice_duration = audio_slicer.audio.duration_seconds
@@ -235,8 +186,8 @@ async def check_and_process_connections():
     redis_client = await get_redis(host='redis',port=6379)
 
     while True:
-        connections = await get_connections()
-        connection_ids =  [c[0] for c in connections]
+        connections = await stream.get_connections(SERVICE_TOKEN,STREAM_API_PORT)
+        connection_ids = [c[0] for c in connections]
 
         for connection_id in connection_ids:
             if connection_id not in running_tasks:
