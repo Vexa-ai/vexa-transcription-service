@@ -43,17 +43,15 @@ SERVICE_TOKEN = os.getenv("SERVICE_TOKEN")
 print('AUDIO_API_PORT',AUDIO_API_PORT)
 
 
-
 @app.on_event("startup")
 async def startup_event():
     global redis_client
-    global admin_redis_client
-    admin_redis_client = await get_redis(host='redis',port=6379,db=1)
+
     redis_client = await get_redis(host='redis',port=6379)
     
     
 async def check_redis():
-    if not redis_client or not admin_redis_client:
+    if not redis_client:
         raise HTTPException(status_code=500, detail="Redis client not initialized")
     
 
@@ -68,8 +66,8 @@ async def check_service_token(service_token):
 @app.get("/get_segments")
 async def get_next_segments(service_token: str, num_segments: int = 100):
     """
-    Fetches the next set of chunks from the specified connection queue.
-    The number of chunks retrieved can be specified by the num_chunks parameter.
+    Fetches the next set of segments from the specified connection queue.
+    The number of segments retrieved can be specified by the num_segments parameter.
     """
     await check_redis()
     await check_service_token(service_token)
@@ -77,9 +75,18 @@ async def get_next_segments(service_token: str, num_segments: int = 100):
     segments = await pop_items(redis_client, 'Segments',num_items=num_segments)
     #log('get_next_segments' ,len(segments))
     if segments:
-        return {"chunks": segments}
+        return {"segments": segments}
     else:
         return {"message": "No more segments available"}
+    
+@app.post("/flush_cache")
+async def flush_cache(): #
+    await check_redis()
+  #  await check_service_token(service_token)
+
+    await redis_client.flushdb()
+    return {"message": "cache flushed successfully"}
+
 
 
 # uvicorn api:app --host 0.0.0.0 --port 8002 --reload

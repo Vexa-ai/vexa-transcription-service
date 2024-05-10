@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   diarize:
-    #command: tail -f /dev/null
-    command: ['python3','diarize.py']
+    command: tail -f /dev/null
+    #command: ['python3','diarize.py']
 
     build:
       context: docker
