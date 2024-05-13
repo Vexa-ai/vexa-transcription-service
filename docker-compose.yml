@@ -25,6 +25,9 @@ services:
     depends_on:
       - qdrant
 
+    deploy:
+      replicas: 2  # Specify the number of instances you want
+
   transcribe:
     command: ['python3','transcribe.py']
     #command: tail -f /dev/null
@@ -40,6 +43,9 @@ services:
     - ${DATA_PATH}/audio:/audio
     - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
+
+    deploy:
+      replicas: 2  # Specify the number of instances you want
 
   audio:
     #command: tail -f /dev/null
@@ -79,4 +85,4 @@ services:
     - ${DATA_PATH}/docker_redis_audio:/data
 
 
- #docker compose -f /home/dima/1/1_audio/docker-compose.yml -p 11 up -d
+ #docker compose -f /home/dima/1/1_audio/docker-compose.yml -p prod_1 up -d

@@ -111,11 +111,12 @@ async def process_connection(connection_id, redis_stream_client, redis_inner_cli
         #         transcribe(audio_name,redis_inner_client,client_id)
         #     )
         while True:
+            await asyncio.sleep(0.1)
             try:
                 log('gathering results from diarize and transcribe') 
                 diarization_result, transcription_result = await asyncio.gather(
-                    asyncio.wait_for(diarize(client_id, audio_name, start, redis_inner_client), timeout=60),  # Timeout after 60 seconds
-                    asyncio.wait_for(transcribe(audio_name, redis_inner_client, client_id), timeout=60)  # Timeout after 60 seconds
+                    asyncio.wait_for(diarize(client_id, audio_name, start, redis_inner_client), timeout=100),  # Timeout after 60 seconds
+                    asyncio.wait_for(transcribe(audio_name, redis_inner_client, client_id), timeout=100)  # Timeout after 60 seconds
                 )
             except asyncio.TimeoutError:
                 log("A task has timed out")
@@ -148,6 +149,7 @@ async def check_and_process_connections():
     redis_inner_client = await get_redis('redis', port=6379)
 
     while True:
+        await asyncio.sleep(0.1)
         connections = await get_connections('initialFeed_audio', redis_stream_client)
         connection_ids = [c.replace('initialFeed_audio:', '') for c in connections]
         # files = await redis_inner_client.smembers(f'Processfromfile')
