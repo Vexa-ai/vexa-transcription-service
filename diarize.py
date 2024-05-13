@@ -85,6 +85,7 @@ async def process(redis_client):
             if len(embeddings)==0: audio.delete()
         else:
             assert 'no audio'
+  
         speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
         segments = [i for i in output.itertracks(yield_label=True)]
         df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
@@ -96,7 +97,7 @@ async def process(redis_client):
         log('done')
     except Exception as e:
         log(e)
-        await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
+        # await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
     
 
 
