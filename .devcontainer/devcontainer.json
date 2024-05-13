@@ -1,11 +1,14 @@
 {
-    "name": "Audio Service",
-    "context": "..",
-    "dockerComposeFile": "../docker-compose.yml",
-    "service": "audio",
-    "workspaceFolder": "/usr/src/app",
-    "extensions": ["ms-python.python", "ms-toolsai.jupyter"],
-    "postCreateCommand": "pip install -r requirements.txt",
-    "shutdownAction": "none"
-  }
+  "name": "Audio Service",
+  "context": "..",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "audio",
+  "workspaceFolder": "/usr/src/app",
+  "extensions": [
+    "ms-python.python",
+    "ms-toolsai.jupyter"
+  ],
+  "postCreateCommand": "pip install -r requirements.txt",
+  "shutdownAction": "none"
+}
   

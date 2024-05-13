@@ -182,9 +182,10 @@ async def task_completed(connection_id,redis_client):
 
 
 async def check_and_process_connections():
-    redis_client = await get_redis(host='redis',port=6379)
+    redis_client = await get_redis(host='redis', port=6379)
 
     while True:
+        await asyncio.sleep(0.1)
         connections = await stream.get_connections(SERVICE_TOKEN,STREAM_API_PORT)
         connection_ids = [c[0] for c in connections]
 
@@ -200,9 +201,8 @@ async def check_and_process_connections():
                     log(f"Error processing connection {connection_id}: {e}")
                     running_tasks.remove(connection_id)
 
-async def main():
-    
 
+async def main():
     await check_and_process_connections()
 
 if __name__ == '__main__':

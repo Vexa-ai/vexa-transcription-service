@@ -17,7 +17,7 @@ services:
     - ${DATA_PATH}/audio:/audio
     - ${DATA_PATH}/logs:/logs
     - /var/run/docker.sock:/var/run/docker.sock
-    
+
 
 
     depends_on:
@@ -45,7 +45,7 @@ services:
     #command: tail -f /dev/null
     command: ['python','process_connections.py']
 
-    build: 
+    build:
       context: docker
       dockerfile: MainDockerfile
     #image: audio:0.2
@@ -61,7 +61,7 @@ services:
     extra_hosts:
        - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
 
-  
+
   qdrant:
     image: qdrant/qdrant
     volumes:
@@ -90,9 +90,26 @@ services:
     depends_on:
       - redis
     environment:
+      SERVICE_VERSION: ${SERVICE_VERSION}
+      SERVICE_NAME: ${SERVICE_NAME}
+      AUDIO_API_HOST: ${AUDIO_API_HOST}
+      AUDIO_API_PORT: ${AUDIO_API_PORT}
       SERVICE_TOKEN: ${SERVICE_TOKEN}
+      DATA_PATH: ${DATA_PATH}
 
-    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "${AUDIO_API_PORT}", "--reload"]
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      STREAM_QUEUE_SERVICE_LIST_CONNECTIONS: ${STREAM_QUEUE_SERVICE_LIST_CONNECTIONS}
+      STREAM_QUEUE_SERVICE_FLUSH_CACHE: ${STREAM_QUEUE_SERVICE_FLUSH_CACHE}
+      STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS: ${STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS}
+      STREAM_QUEUE_SERVICE_HEALTH: ${STREAM_QUEUE_SERVICE_HEALTH}
+      STREAM_QUEUE_SERVICE_HEALTH_CHECK: ${STREAM_QUEUE_SERVICE_HEALTH_CHECK}
+      STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
+      STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
+
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${AUDIO_API_PORT}", "--reload"]
     #command: tail -f /dev/null
     volumes:
       - .:/usr/src/app
