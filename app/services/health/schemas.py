@@ -1,7 +1,4 @@
-"""Validators for health status of services.
-
-Classes are developed in accordance with the current KSUP `.net` services of KSUP: ADOC and ProjectService.
-"""
+"""Validators for health status of services."""
 from typing import Dict
 
 from pydantic import BaseModel
