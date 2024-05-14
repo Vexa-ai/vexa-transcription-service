@@ -9,9 +9,9 @@ from app.api.v1.routers.tools import router as tools_router
 router = APIRouter()
 
 # v1 API endpoints
-router.include_router(segments_router, prefix="/v1")
 router.include_router(embeddings_router, prefix="/v1")
 router.include_router(health_router, prefix="/v1")
+router.include_router(segments_router, prefix="/v1")
 router.include_router(tools_router, prefix="/v1")
 
 # you cat place other v1 endpoint or add new v2

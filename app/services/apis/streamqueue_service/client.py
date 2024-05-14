@@ -17,6 +17,7 @@ from app.services.apis.streamqueue_service.exceptions import (
     StreamQueueServiceRequestError,
     StreamQueueServiceTimeoutError,
 )
+from app.services.health.schemas import Health
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -69,9 +70,9 @@ class StreamQueueServiceAPI(BaseAPI):
             #     return {"error": "An error occurred while requesting chunks", "exception": str(e)}
 
     async def health(self) -> bool:
-        # ToDo: implement /health endpoint in StreamQueue-service
-        logger.warning("Not implemented yet")
-        return True
+        raw_data = await self._process_request(method=HTTPMethod.GET, url=str(settings.audio_service_health))
+        health_info = Health(**raw_data)
+        return health_info.is_available
 
     async def _process_request(self, method: HTTPMethod, url: str, **kwargs) -> Any:
         """Base function to process api requests."""

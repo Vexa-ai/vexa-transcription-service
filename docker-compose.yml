@@ -1,7 +1,23 @@
 version: '3.8'
 
 services:
+  qdrant:
+    image: qdrant/qdrant
+    restart: unless-stopped
+    volumes:
+      - ${VOLUME_DATA_PATH}/qdrant:/qdrant/storage
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:6379"  #needs to be exposed outside for remote connection of the main server
+    volumes:
+      - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
+
   diarize:
+    depends_on:
+      - qdrant
     command: tail -f /dev/null
     #command: ['python3','diarize.py']
 
@@ -12,16 +28,12 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/usr/src/app
-    - ../library:/usr/src/library
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock
 
-
-
-    depends_on:
-      - qdrant
 
   transcribe:
     command: ['python3','transcribe.py']
@@ -35,11 +47,11 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/usr/src/app
-    - ../library:/usr/src/library
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock
 
   audio:
     #command: tail -f /dev/null
@@ -52,50 +64,32 @@ services:
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/usr/src/app
-    - ../library:/usr/src/library
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock
 
     extra_hosts:
-       - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
-
-
-  qdrant:
-    image: qdrant/qdrant
-    volumes:
-
-    - ${DATA_PATH}/qdrant:/qdrant/storage
-
-    restart: unless-stopped
-
-
-  redis:
-    image: redis:latest
-    restart: unless-stopped
-    ports:
-      - "${AUDIO_REDIS_PORT}:6379" #needs to be exposed outside for remote connection of the main server
-    volumes:
-    - ${DATA_PATH}/docker_redis_audio:/data
-
+       - "host.docker.internal:host-gateway" # to connect to host port - stream queue. Will be remote host
 
   api:
-    #image: stream_api
+    #image: audio_api
+    restart: unless-stopped
     build: 
       context: docker
       dockerfile: MainDockerfile
     ports:
-      - "${AUDIO_API_PORT}:${AUDIO_API_PORT}"
+      - "${SERVICE_API_PORT}:${SERVICE_API_PORT}"
     depends_on:
       - redis
     environment:
       SERVICE_VERSION: ${SERVICE_VERSION}
       SERVICE_NAME: ${SERVICE_NAME}
-      AUDIO_API_HOST: ${AUDIO_API_HOST}
-      AUDIO_API_PORT: ${AUDIO_API_PORT}
+      SERVICE_API_HOST: ${SERVICE_API_HOST}
+      SERVICE_API_PORT: ${SERVICE_API_PORT}
       SERVICE_TOKEN: ${SERVICE_TOKEN}
-      DATA_PATH: ${DATA_PATH}
+      VOLUME_DATA_PATH: ${VOLUME_DATA_PATH}
 
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
@@ -109,12 +103,10 @@ services:
       STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
       STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
 
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${AUDIO_API_PORT}", "--reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # to connect to host ports
     #command: tail -f /dev/null
     volumes:
       - .:/usr/src/app
       - ../library:/usr/src/library
-    restart: unless-stopped
-
-    extra_hosts:
-        - "host.docker.internal:host-gateway"
