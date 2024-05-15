@@ -12,10 +12,11 @@ class Settings(BaseSettings):
 
     service_version: str = "0.1.0"
     service_name: str = "Audio API"
+    service_api_host: str = "0.0.0.0"
+    service_api_port: int = 8000
     service_token: str = "service_token"
 
-    audio_api_host: str = "0.0.0.0"
-    audio_api_port: int = 8000
+    check_and_process_connections_interval_sec: Optional[float] = None
 
     stream_queue_service_list_connections: AnyUrl
     stream_queue_service_flush_cache: AnyUrl
@@ -28,11 +29,6 @@ class Settings(BaseSettings):
     redis_host: str
     redis_port: int
     redis_password: Optional[str] = None
-
-    @property
-    def redis_connection(self) -> str:
-        """str: String to connect to Redis database (engine-service)."""
-        return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/0"
 
     class Config:
         # filename that contains environment variables

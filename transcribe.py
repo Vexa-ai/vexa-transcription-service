@@ -1,52 +1,53 @@
-
-from audio.redis import *
-from audio.audio import *
 import io
 from faster_whisper import WhisperModel
 
-import json
-
+from app.services.audio.redis import Audio, Transcript
+from app.settings import settings
 import asyncio
+from app.database_redis.connection import get_redis_client
 
-import time
-import sys
-sys.path.insert(0,'../library')
-from vexa.tools import log
-from vexa.redis import get_redis
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-async def process(redis_client):
+async def process(redis_client) -> None:
     try:
-        _,item = await redis_client.brpop('Audio2TranscribeQueue')
-        log('received')
-        audio_name,client_id = item.split(':')
-        audio = Audio(audio_name,redis_client)
+        _, item = await redis_client.brpop('Audio2TranscribeQueue')
+        logger.info('received transcribe item')
+        audio_name, client_id = item.split(':')
+
+    except Exception as ex:
+        logger.exception(ex)
+        return
+
+    try:
+        audio = Audio(audio_name, redis_client)
+
         if await audio.get():
-            log('here')
-            segments, _ = model.transcribe(io.BytesIO(audio.data), beam_size=5,vad_filter=True,word_timestamps=True)
+            segments, _ = model.transcribe(io.BytesIO(audio.data), beam_size=5, vad_filter=True, word_timestamps=True)
             segments = [s for s in list(segments)]
-            log('done')
+            logger.info('done')
             transcription = [[w._asdict() for w in s.words] for s in segments]
-            await Transcript(audio_name,redis_client,transcription).save()
+            await Transcript(audio_name, redis_client, transcription).save()
             await redis_client.lpush(f'TranscribeReady:{audio_name}', 'Done')
-            log('done')
-    except Exception as e:
-        log(e)
+            logger.info('done')
+
+    except Exception as ex:
+        logger.exception(ex)
         await redis_client.rpush('Audio2TranscribeQueue', f'{audio_name}:{client_id}')
 
 
 async def main():
-    redis_client = await get_redis(host='redis',port=6379)
+    redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
+
     while True:
-    
+        await asyncio.sleep(0.1)
         await process(redis_client)
 
 
 if __name__ == '__main__':
     model_size = "large-v3"
     model = WhisperModel(model_size, device="cuda", compute_type="float16")
-    log('model loaded')
-    
-    # log('test')
+    logger.info('Model loaded')
     asyncio.run(main())
-

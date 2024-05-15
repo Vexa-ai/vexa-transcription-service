@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.api import router
+from app.events import add_event_handlers
 from app.exception_handler import add_exception_handlers
 from app.settings import settings
 
@@ -13,6 +14,7 @@ app = FastAPI(
 )
 
 add_exception_handlers(app)
+add_event_handlers(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -26,4 +28,4 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=settings.audio_api_host, port=settings.audio_api_port)
+    uvicorn.run(app, host=settings.service_api_host, port=settings.service_api_port)

@@ -53,26 +53,6 @@ services:
       - ${VOLUME_DATA_PATH}/logs:/logs
       - /var/run/docker.sock:/var/run/docker.sock
 
-  audio:
-    #command: tail -f /dev/null
-    command: ['python','process_connections.py']
-
-    build:
-      context: docker
-      dockerfile: MainDockerfile
-    #image: audio:0.2
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
-      - ${VOLUME_DATA_PATH}/logs:/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-
-    extra_hosts:
-       - "host.docker.internal:host-gateway" # to connect to host port - stream queue. Will be remote host
-
   api:
     #image: audio_api
     restart: unless-stopped
@@ -90,6 +70,7 @@ services:
       SERVICE_API_PORT: ${SERVICE_API_PORT}
       SERVICE_TOKEN: ${SERVICE_TOKEN}
       VOLUME_DATA_PATH: ${VOLUME_DATA_PATH}
+      CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC: ${CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC}
 
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
