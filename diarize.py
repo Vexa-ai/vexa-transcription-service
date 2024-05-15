@@ -9,6 +9,7 @@ import torch
 from pyannote.audio import Pipeline
 from qdrant_client import QdrantClient, models
 
+from app.database_redis import keys
 from app.database_redis.connection import get_redis_client
 from app.services.audio.redis import Audio, Diarisation
 from app.settings import settings
@@ -45,7 +46,7 @@ async def add_new_speaker_emb(emb: list, redis_client, client_id, speaker_id=Non
             models.PointStruct(id=str(uuid4()), vector=emb, payload={"speaker_id": speaker_id, "client_id": client_id})
         ],
     )
-    await redis_client.lpush("Embeddings", json.dumps((speaker_id, emb.tolist(), client_id)))
+    await redis_client.lpush(keys.EMBEDDINGS, json.dumps((speaker_id, emb.tolist(), client_id)))
     logger.info(f"Added new speaker {speaker_id}")
     return speaker_id
 

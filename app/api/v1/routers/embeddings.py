@@ -11,5 +11,5 @@ router = APIRouter(prefix="/embeddings", tags=["embeddings"])
 @router.get("")
 async def get_embeddings(service_token: str = Depends(verify_token), num_segments: int = 100):
     client = RedisDAL(await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password))
-    embeddings = await client.rpop_many(key="Embeddings", limit=num_segments)
+    embeddings = await client.get_embeddings(limit=num_segments)
     return {"embeddings": embeddings}

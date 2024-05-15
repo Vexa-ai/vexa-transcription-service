@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.database_redis.connection import get_redis_client
 from app.settings import settings
 
-router = APIRouter(prefix="", tags=["tools"])
+router = APIRouter(prefix="tools", tags=["tools"])
 
 
 @router.post("/flush_cache")
