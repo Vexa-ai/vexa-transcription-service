@@ -7,7 +7,7 @@ from app.services.audio.processor import Processor
 logger = logging.getLogger(__name__)
 
 
-class ProcessConnectionService(PeriodicService):
+class ProcessConnectionTask(PeriodicService):
     """ToDo."""
 
     def __init__(self, **kwargs):

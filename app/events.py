@@ -4,7 +4,7 @@ import asyncio
 from fastapi import FastAPI
 
 from app.settings import settings
-from app.utils.periodic_services.process_connections import ProcessConnectionService
+from app.tasks.process_connections import ProcessConnectionTask
 
 
 def add_event_handlers(app: FastAPI) -> None:
@@ -13,7 +13,7 @@ def add_event_handlers(app: FastAPI) -> None:
 
 async def check_and_process_connections():
     if settings.check_and_process_connections_interval_sec:
-        service = ProcessConnectionService(
+        service = ProcessConnectionTask(
             interval=settings.check_and_process_connections_interval_sec,
             delay=0,
             loop=asyncio.get_running_loop(),
