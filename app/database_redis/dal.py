@@ -5,8 +5,8 @@ from typing import Any
 
 from redis.asyncio.client import Redis
 
-from app.database_redis.exceptions import DataNotFoundError
 from app.database_redis import keys
+from app.database_redis.exceptions import DataNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,11 @@ class RedisDAL:
     async def get_embeddings(self, limit: int = 100) -> Any:
         return await self.rpop_many(key=keys.EMBEDDINGS, limit=limit)
 
-    async def get_segments(self, limit: int = 100) -> Any:
-        return await self.rpop_many(key=keys.SEGMENTS, limit=limit)
+    async def get_diarize_segments(self, limit: int = 100) -> Any:
+        return await self.rpop_many(key=keys.SEGMENTS_DIARIZE, limit=limit)
+
+    async def get_transcribe_segments(self, limit: int = 100) -> Any:
+        return await self.rpop_many(key=keys.SEGMENTS_TRANSCRIBE, limit=limit)
 
     async def rpop_many(self, key: str, limit: int = 1, raise_exception: bool = False) -> Any:
         """Retrieves a specified number of audio chunks from this connection's queue in a FIFO manner using RPOP.

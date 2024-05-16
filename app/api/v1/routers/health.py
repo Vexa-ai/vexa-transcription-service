@@ -34,7 +34,7 @@ async def health_check() -> JSONResponse:
     """Get the health status of the current service and dependencies (db, redis, etc.).
 
     Returns:\n
-        200 OK:
+        503 SERVICE_UNAVAILABLE:
             {
               "is_available": false,
               "entries": {
@@ -43,6 +43,21 @@ async def health_check() -> JSONResponse:
                 },
                 "redis": {
                   "is_available": false
+                },
+                "stream_queue_service": {
+                  "is_available": true
+                }
+              }
+            }
+        200 OK:
+            {
+              "is_available": true,
+              "entries": {
+                "self": {
+                  "is_available": true
+                },
+                "redis": {
+                  "is_available": true
                 },
                 "stream_queue_service": {
                   "is_available": true

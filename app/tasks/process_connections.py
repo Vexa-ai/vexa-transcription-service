@@ -8,8 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class ProcessConnectionTask(PeriodicService):
-    """ToDo."""
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.__processor = Processor()

@@ -74,14 +74,17 @@ class Processor:
                 else:
                     logger.info("processing finished", connection_id)
 
+                    # ToDo: push results here:
+                    #  "Segments-Transcribe:{meeting_id}"
+                    #  "Segments-Diarize:{meeting_id}"
                     await redis_client.lpush(
-                        f"Segments",
+                        "Segments",
                         json.dumps(
                             (
-                                meeting_id,
+                                meeting_id,  # ToDo: Delete
                                 diarization_result,
                                 transcription_result,
-                                start,
+                                start,  # ToDo: possible to delete
                                 start_timestamp,
                                 finish_timestamp,
                             )
