@@ -9,3 +9,11 @@ DIARIZE_READY = "DiarizeReady"  # special queue of items that have successfully 
 
 AUDIO_2_TRANSCRIBE_QUEUE = "Audio2TranscribeQueue"  # special queue of elements ready for transcribing
 TRANSCRIBE_READY = "TranscribeReady"  # special queue of elements that have successfully transcribed
+
+
+
+
+
+
+
+

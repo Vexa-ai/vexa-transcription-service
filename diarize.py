@@ -20,6 +20,26 @@ logger = logging.getLogger(__name__)
 client = QdrantClient("qdrant", timeout=10)
 
 
+async def __get_next_chunk_start(diarization_result, length, shift):
+
+    if len(diarization_result) > 0:
+        last_speech = diarization_result[-1]
+
+        ended_silence = length - last_speech["end"]
+        logger.info(ended_silence)
+        if ended_silence < 2:
+            logger.info("interrupted")
+            return last_speech["start"] + shift
+
+        else:
+            logger.info("non-interrupted")
+            return last_speech["end"] + shift
+
+    else:
+        return None
+    
+    
+
 def get_stored_knn(emb: list, client_id):
     search_result = client.search(
         collection_name="main",
@@ -73,17 +93,35 @@ def parse_segment(segment):
 
 
 async def process(redis_client) -> None:
-    try:
-        _, item = await redis_client.brpop("Audio2DiarizeQueue")
-        logger.info('received diarize item')
-        audio_name, client_id = item.split(":")
+    # spop from diarizer_todo
+    # sadd diarizer_doing, 
+    # if already there:
+    #    pass
+    #     
+    # else:
+    #   if current_timestamp - seek < step:
+    #        put back into diarizer_todo
+    #        pass
+    
+    #   else:
+    #       find connection that is withing range for seek and better is longer covering step segment
+    #       extract audio from seek up to the end of file or max_len which is smaller
+    #       process audio and get output
+    #       populate DiarizeReady
+    #       save iarize_seek into meeting_id hash
+    #    
+    
+    
 
-    except Exception as ex:
-        logger.exception(ex)
-        return
 
     try:
-        audio = Audio(audio_name, redis_client)
+        
+    
+    
+        # audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, start, start + max_length)
+        # slice_duration = audio_slicer.audio.duration_seconds
+        # audio = Audio(audio_name, redis_client)
+        
         if await audio.get():
             output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
             if len(embeddings) == 0:
