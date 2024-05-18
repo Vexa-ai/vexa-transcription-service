@@ -28,6 +28,8 @@ class Processor:
 
         for connection_id in connection_ids:
             await self._process_connection_task(self,connection_id)
+            
+        await asyncio.sleep(2)
 
 
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5, max_length=240):
@@ -35,7 +37,7 @@ class Processor:
         
 
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(connection_id) 
-        ≠
+        
         connection = Connection(redis_client,connection_id, user_id)
         connection.update_timestamps(segment_start_timestamp,segment_end_timestamp)
         

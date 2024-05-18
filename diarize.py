@@ -11,8 +11,11 @@ from qdrant_client import QdrantClient, models
 
 from app.database_redis import keys
 from app.database_redis.connection import get_redis_client
-from app.services.audio.redis import Audio, Diarisation
+from app.services.audio.redis import Diarisation
 from app.settings import settings
+
+from app.services.audio import AudioSlicer
+from app.services.audio.redis import Connection, Meeting, Diarizer
 
 logger = logging.getLogger(__name__)
 
@@ -92,64 +95,57 @@ def parse_segment(segment):
     return segment[0].start, segment[0].end, int(segment[-1].split("_")[1])
 
 
-async def process(redis_client) -> None:
-    # spop from diarizer_todo
-    # sadd diarizer_doing, 
-    # if already there:
-    #    pass
-    #     
-    # else:
-    #   if current_timestamp - seek < step:
-    #        put back into diarizer_todo
-    #        pass
+async def process(redis_client, pipeline, max_length=240):
     
-    #   else:
-    #       find connection that is withing range for seek and better is longer covering step segment
-    #       extract audio from seek up to the end of file or max_len which is smaller
-    #       process audio and get output
-    #       populate DiarizeReady
-    #       save iarize_seek into meeting_id hash
-    #    
+    diarizer = Diarizer(redis_client)
+    
+    meeting_id = await diarizer.pop_inprogress()
+    if not meeting_id:
+        return
+    
+    meeting = Meeting(redis_client, meeting_id)
+    await meeting.load_from_redis()
+    
+
+    seek = meeting.diarize_seek_timestamp - meeting.start_timestamp
+    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{meeting_id}.webm", seek, seek + max_length)
+    slice_duration = audio_slicer.audio.duration_seconds
+    audio_data = await audio_slicer.export_data()
+    
+    
+    output, embeddings = pipeline(io.BytesIO(audio_data), return_embeddings=True)
+    
+    if len(embeddings) == 0:
+        logger.info("No embeddings found, skipping...")
+        return
     
     
 
+    speakers = [await process_speaker_emb(e, redis_client, meeting_id) for e in embeddings]
 
-    try:
-        
+    # Parse the output segments
+    segments = [i for i in output.itertracks(yield_label=True)]
+    df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
+    df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
+    df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
+    result = df.drop(columns=["speaker_id"]).to_dict("records")
+
+
+    diarization = diarization(meeting_id)
+    diarization.lpush()
     
+    #TODO: apply absoute timestamp logic instead of start and store to meeting.start_timestamp
+    start_ = await __get_next_chunk_start(result, slice_duration,start)
+    start = start_ if start_ else start+slice_duration
+ 
     
-        # audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, start, start + max_length)
-        # slice_duration = audio_slicer.audio.duration_seconds
-        # audio = Audio(audio_name, redis_client)
-        
-        if await audio.get():
-            output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
-            if len(embeddings) == 0:
-                await audio.delete()
-        else:
-            assert "no audio"
-
-        speakers = [await process_speaker_emb(e, redis_client, client_id) for e in embeddings]
-        segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
-        df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
-        df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
-        diarization_data = df.drop(columns=["speaker_id"]).to_dict("records")
-        await Diarisation(audio_name, redis_client, diarization_data).save()
-        await redis_client.lpush(f"DiarizeReady:{audio_name}", "Done")
-        logger.info("done")
-
-    except Exception as ex:
-        logger.error(ex)
-        await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
-
 
 async def main():
     redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
     while True:
         await asyncio.sleep(0.1)
-        await process(redis_client)
+        await process(redis_client,pipeline)
 
 
 if __name__ == "__main__":

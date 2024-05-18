@@ -16,13 +16,15 @@ class Settings(BaseSettings):
     service_api_port: int = 8000
     service_token: str = "service_token"
 
-    check_and_process_connections_interval_sec: Optional[float] = None
+   # check_and_process_connections_interval_sec: Optional[float] = None  #TODO this commented out causion problem
 
-    stream_queue_service_list_connections: AnyUrl
-    stream_queue_service_flush_cache: AnyUrl
-    stream_queue_service_get_next_chunks: AnyUrl
-    stream_queue_service_health: AnyUrl
-    stream_queue_service_health_check: AnyUrl
+
+#changed to str
+    stream_queue_service_list_connections: str 
+    stream_queue_service_flush_cache: str
+    stream_queue_service_get_next_chunks: str
+    stream_queue_service_health: str
+    stream_queue_service_health_check: str
     stream_queue_service_request_timeout: int = 120
     stream_queue_service_auth_token: str
 
