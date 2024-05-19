@@ -41,12 +41,12 @@ class Processor:
 
         
 
-        if (current_time - meeting.last_updated_timestamp) > diarizer_step:
+        if (current_time - meeting.diarizer_last_updated_timestamp) > diarizer_step:
 
             diarizer = Diarizer(redis_client)
             diarizer.add_todo(meeting.id)
 
-        if (current_time - meeting.last_updated_timestamp) > transcriber_step:
+        if (current_time - meeting.transcriber_last_updated_timestamp) > transcriber_step:
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.id)
 

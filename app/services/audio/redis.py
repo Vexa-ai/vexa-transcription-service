@@ -112,15 +112,17 @@ class Meeting:
         self.metadata_type_ = f"meeting:{meeting_id}:metadata"
         self.connections_type_ = f"meeting:{meeting_id}:connections"
         self.start_timestamp: Optional[Any] = None
-        self.diarize_seek_timestamp: Optional[Any] = None
-        self.transcribe_seek_timestamp: Optional[Any] = None
-        self.last_updated_timestamp: Optional[Any] = None
+        self.diarizer_seek_timestamp: Optional[Any] = None
+        self.transcriber_seek_timestamp: Optional[Any] = None
+        self.transcriber_last_updated_timestamp: Optional[Any] = None
+        self.diarizer_last_updated_timestamp: Optional[Any] = None
 
         self.timestamps = [
             "start_timestamp",
             "diarize_seek_timestamp",
             "transcribe_seek_timestamp",
-            "last_updated_timestamp",
+            "transcriber_last_updated_timestamp",
+            "diarizer_last_updated_timestamp"
         ]
 
     async def _update_field(self, field_name: str, value: Optional[Any]):
@@ -153,10 +155,11 @@ class Meeting:
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
 
-    def update_timestamps(self, segment_start_timestamp, last_updated_timestamp):
+    def update_timestamps(self, segment_start_timestamp, transcriber_last_updated_timestamp=None,diarizer_last_updated_timestamp=None):
         self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
-        self.last_updated_timestamp = last_updated_timestamp
+        self.transcriber_last_updated_timestamp = transcriber_last_updated_timestamp
+        self.diarizer_last_updated_timestamp = diarizer_last_updated_timestamp
         self.update_redis()
 
 
