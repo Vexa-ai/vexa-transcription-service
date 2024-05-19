@@ -6,36 +6,53 @@ from app.settings import settings
 import asyncio
 from app.database_redis.connection import get_redis_client
 
+
+from app.services.audio.redis import Transcriber,Meeting,best_covering_connection
+
+from datetime import datetime,timezone
+
+from app.services.audio import AudioSlicer
+
+
+
 import logging
 
 logger = logging.getLogger(__name__)
 
+#TODO: implement recurrent prompt from last item
 
-async def process(redis_client) -> None:
-    try:
-        _, item = await redis_client.brpop('Audio2TranscribeQueue')
-        logger.info('received transcribe item')
-        audio_name, client_id = item.split(':')
 
-    except Exception as ex:
-        logger.exception(ex)
+async def process(redis_client, model, max_length=240) -> None:
+    transcriber = Transcriber(redis_client)
+    
+    meeting_id = await transcriber.pop_inprogress()
+    if not meeting_id:
         return
+    
+    meeting = Meeting(redis_client, meeting_id)
+    await meeting.load_from_redis()
+    seek = meeting.transcribe_seek_timestamp - meeting.start_timestamp
+    
+    current_time = datetime.now(timezone.utc)
+    
+    connection = best_covering_connection(seek,current_time,meeting.get_connections())
+    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, seek + max_length)
 
-    try:
-        audio = Audio(audio_name, redis_client)
+    audio_data = await audio_slicer.export_data()
+    
+    
 
-        if await audio.get():
-            segments, _ = model.transcribe(io.BytesIO(audio.data), beam_size=5, vad_filter=True, word_timestamps=True)
-            segments = [s for s in list(segments)]
-            logger.info('done')
-            transcription = [[w._asdict() for w in s.words] for s in segments]
-            await Transcript(audio_name, redis_client, transcription).save()
-            await redis_client.lpush(f'TranscribeReady:{audio_name}', 'Done')
-            logger.info('done')
-
-    except Exception as ex:
-        logger.exception(ex)
-        await redis_client.rpush('Audio2TranscribeQueue', f'{audio_name}:{client_id}')
+    segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
+    segments = [s for s in list(segments)]
+    logger.info('done')
+    result = [[w._asdict() for w in s.words] for s in segments]
+    transcription = transcription(meeting_id,redis_client,result)
+    transcription.lpush()
+    
+    
+    meeting.transcribe_seek_timestamp = result.max_timestamp+current_time #result.max_timestamp is hypothetic last timestamp in results which nneds to be determined from life data
+    transcriber.remove(meeting.id)
+    meeting.update_redis()
 
 
 async def main():
@@ -43,7 +60,7 @@ async def main():
 
     while True:
         await asyncio.sleep(0.1)
-        await process(redis_client)
+        await process(redis_client,model)
 
 
 if __name__ == '__main__':

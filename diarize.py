@@ -15,7 +15,7 @@ from app.services.audio.redis import Diarisation
 from app.settings import settings
 
 from app.services.audio import AudioSlicer
-from app.services.audio.redis import Connection, Meeting, Diarizer, get_timestamps_overlap,best_covering_connection
+from app.services.audio.redis import Meeting, Diarizer,best_covering_connection
 
 from datetime import datetime,timezone
 
@@ -130,7 +130,7 @@ async def process(redis_client, pipeline, max_length=240):
     result = df.drop(columns=["speaker_id"]).to_dict("records")
 
 
-    diarization = Diarisation(meeting_id)
+    diarization = Diarisation(meeting_id,redis_client,result)
     diarization.lpush()
     
     start_ = await __get_next_chunk_start(result, slice_duration,current_time-seek)
