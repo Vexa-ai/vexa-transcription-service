@@ -3,7 +3,6 @@ import logging.config
 from pathlib import Path
 from typing import Optional
 
-from pydantic import AnyUrl
 from pydantic_settings import BaseSettings
 
 
@@ -16,11 +15,9 @@ class Settings(BaseSettings):
     service_api_port: int = 8000
     service_token: str = "service_token"
 
-   # check_and_process_connections_interval_sec: Optional[float] = None  #TODO this commented out causion problem
+    check_and_process_connections_interval_sec: Optional[float] = None
 
-
-#changed to str
-    stream_queue_service_list_connections: str 
+    stream_queue_service_list_connections: str
     stream_queue_service_flush_cache: str
     stream_queue_service_get_next_chunks: str
     stream_queue_service_health: str

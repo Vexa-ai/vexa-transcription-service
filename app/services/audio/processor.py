@@ -1,18 +1,13 @@
 import asyncio
-import json
 import logging
-import uuid
-import datetime
+from datetime import datetime
 
 from app.database_redis.connection import get_redis_client
 from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
-from app.services.audio.audio import AudioSlicer
-from app.services.audio.redis import Connection, Meeting, Diarizer, Transcriber
+from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
 
-
 logger = logging.getLogger(__name__)
-
 
 
 class Processor:
@@ -21,48 +16,42 @@ class Processor:
         self.__stream_queue_service_api = StreamQueueServiceAPI()
 
     async def process_connections(self):
-
-
         connections = await self.__stream_queue_service_api.get_connections()
         connection_ids = [c[0] for c in connections]
 
         for connection_id in connection_ids:
-            await self._process_connection_task(self,connection_id)
+            await self._process_connection_task(self, connection_id)
 
         await asyncio.sleep(2)
-
 
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5, max_length=240):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
+        meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(
+            connection_id
+        )
 
-        meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(connection_id)
-
-        connection = Connection(redis_client,connection_id, user_id)
-        connection.update_timestamps(segment_start_timestamp,segment_end_timestamp)
+        connection = Connection(redis_client, connection_id, user_id)
+        connection.update_timestamps(segment_start_timestamp, segment_end_timestamp)
 
         meeting = Meeting(redis_client, meeting_id)
-        meeting.load_from_redis()
+        await meeting.load_from_redis()
 
         meeting.add_connection(connection.id)
 
-
-        #TODO:reconsider timestamp logic
+        # TODO:reconsider timestamp logic
         if datetime.utcnow() - max(meeting.last_updated_timestamp, meeting.diarize_seek_timestamp) > diarizer_step:
             diarizer = Diarizer(redis_client)
-            diarizer.add_todo(meeting.id)
+            await diarizer.add_todo(meeting.id)
 
-
-        if datetime.utcnow() - max(meeting.last_updated_timestamp, meeting.transcribe_seek_timestamp) > transcriber_step:
+        if (
+            datetime.utcnow() - max(meeting.last_updated_timestamp, meeting.transcribe_seek_timestamp)
+            > transcriber_step
+        ):
             transcriber = Transcriber(redis_client)
-            transcriber.add_todo(meeting.id)
+            await transcriber.add_todo(meeting.id)
 
-
-
-        meeting.update_timestamps(segment_start_timestamp,datetime.utcnow())
-
-
-
+        meeting.update_timestamps(segment_start_timestamp, datetime.utcnow())
 
     async def __writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"
@@ -70,6 +59,9 @@ class Processor:
         items = await self.__stream_queue_service_api.fetch_chunks(connection_id, num_chunks=100)
 
         if items:
+            # if there is no meeting_id in META-data
+            meeting_id = connection_id
+
             for item in items["chunks"]:
                 chunk = bytes.fromhex(item["chunk"])
                 first_timestamp = item["timestamp"] if not first_timestamp else first_timestamp
@@ -81,6 +73,6 @@ class Processor:
 
                 last_timestamp = item["timestamp"]
                 meeting_id = item["meeting_id"]
-                client_id = item["client_id"] #thi
+                client_id = item["client_id"]  # thi
 
             return meeting_id, first_timestamp, last_timestamp, client_id
