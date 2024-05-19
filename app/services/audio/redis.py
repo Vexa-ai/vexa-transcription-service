@@ -145,7 +145,11 @@ class Meeting:
         self.redis.sadd(self.connections_type_, connection_id)
 
     def get_connections(self):
-        return self.redis.smembers(self.connections_type_)
+        connection_ids = self.redis.smembers(self.connections_type_)
+        connections = [Connection(self.redis,id) for id in connection_ids]
+        return [c.load_from_redis() for c in connections]
+        
+         
 
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
@@ -165,8 +169,10 @@ class ProcessorManager:
         self.todo_type_ = f"{processor_type.lower()}:todo"
         self.in_progress_type_ = f"{processor_type.lower()}:in_progress"
 
+
     async def add_todo(self, task_id: str):
         await self.redis.sadd(self.todo_type_, task_id)
+
 
     async def pop_inprogress(self) -> Union[str, None]:
         task_id = await self.redis.spop(self.todo_type_)
@@ -174,7 +180,7 @@ class ProcessorManager:
             await self.redis.sadd(self.in_progress_type_, task_id)
         return task_id
 
-    async def remove_from_in_progress(self, task_id: str):
+    async def remove(self, task_id: str):
         await self.redis.srem(self.in_progress_type_, task_id)
         
         
@@ -187,3 +193,25 @@ class Diarizer(ProcessorManager):
 class Transcriber(ProcessorManager):
     def __init__(self, redis_client: Redis):
         super().__init__(redis_client, "Transcribe")
+        
+        
+# funcs to determing  connection that best overlap  the target period     
+def get_timestamps_overlap(start1, end1, start2, end2):
+
+    latest_start = max(start1, start2)
+    earliest_end = min(end1, end2)
+    delta = (earliest_end - latest_start).total_seconds()
+    return max(0, delta)
+
+def best_covering_connection(target_start, target_end, connections):
+
+    best_connection = None
+    max_overlap = 0
+    
+    for connection in connections:
+        overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
+        if overlap > max_overlap:
+            max_overlap = overlap
+            best_connection = connection
+            
+    return best_connection
