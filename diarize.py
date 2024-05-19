@@ -15,32 +15,14 @@ from app.services.audio.redis import Diarisation
 from app.settings import settings
 
 from app.services.audio import AudioSlicer
-from app.services.audio.redis import Connection, Meeting, Diarizer
+from app.services.audio.redis import Connection, Meeting, Diarizer, get_timestamps_overlap,best_covering_connection
+
+from datetime import datetime,timezone
 
 logger = logging.getLogger(__name__)
 
 # client = QdrantClient("host.docker.internal", timeout=10, port=6333)
 client = QdrantClient("qdrant", timeout=10)
-
-
-async def __get_next_chunk_start(diarization_result, length, shift):
-
-    if len(diarization_result) > 0:
-        last_speech = diarization_result[-1]
-
-        ended_silence = length - last_speech["end"]
-        logger.info(ended_silence)
-        if ended_silence < 2:
-            logger.info("interrupted")
-            return last_speech["start"] + shift
-
-        else:
-            logger.info("non-interrupted")
-            return last_speech["end"] + shift
-
-    else:
-        return None
-    
     
 
 def get_stored_knn(emb: list, client_id):
@@ -94,7 +76,24 @@ async def process_speaker_emb(emb: list, redis_client, client_id):
 def parse_segment(segment):
     return segment[0].start, segment[0].end, int(segment[-1].split("_")[1])
 
+async def __get_next_chunk_start(diarization_result, length, shift):
 
+    if len(diarization_result) > 0:
+        last_speech = diarization_result[-1]
+
+        ended_silence = length - last_speech["end"]
+        logger.info(ended_silence)
+        if ended_silence < 2:
+            logger.info("interrupted")
+            return last_speech["start"] + shift
+
+        else:
+            logger.info("non-interrupted")
+            return last_speech["end"] + shift
+
+    else:
+        return None
+    
 async def process(redis_client, pipeline, max_length=240):
     
     diarizer = Diarizer(redis_client)
@@ -105,10 +104,12 @@ async def process(redis_client, pipeline, max_length=240):
     
     meeting = Meeting(redis_client, meeting_id)
     await meeting.load_from_redis()
-    
-
     seek = meeting.diarize_seek_timestamp - meeting.start_timestamp
-    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{meeting_id}.webm", seek, seek + max_length)
+    
+    current_time = datetime.now(timezone.utc)
+    
+    connection = best_covering_connection(seek,current_time,meeting.get_connections())
+    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, seek + max_length)
     slice_duration = audio_slicer.audio.duration_seconds
     audio_data = await audio_slicer.export_data()
     
@@ -119,11 +120,9 @@ async def process(redis_client, pipeline, max_length=240):
         logger.info("No embeddings found, skipping...")
         return
     
-    
-
     speakers = [await process_speaker_emb(e, redis_client, meeting_id) for e in embeddings]
 
-    # Parse the output segments
+
     segments = [i for i in output.itertracks(yield_label=True)]
     df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
     df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
@@ -134,9 +133,12 @@ async def process(redis_client, pipeline, max_length=240):
     diarization = Diarisation(meeting_id)
     diarization.lpush()
     
-    #TODO: apply absoute timestamp logic instead of start and store to meeting.start_timestamp
-    start_ = await __get_next_chunk_start(result, slice_duration,start)
+    start_ = await __get_next_chunk_start(result, slice_duration,current_time-seek)
     start = start_ if start_ else start+slice_duration
+    
+    meeting.diarize_seek_timestamp = start+current_time
+    diarizer.remove(meeting.id)
+    meeting.update_redis()
  
     
 
@@ -155,3 +157,9 @@ if __name__ == "__main__":
     )
     pipeline.to(torch.device("cuda"))
     asyncio.run(main())
+
+
+
+
+
+    
