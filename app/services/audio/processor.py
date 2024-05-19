@@ -68,6 +68,6 @@ class Processor:
 
                 last_timestamp = item["timestamp"]
                 meeting_id = item["meeting_id"]
-                client_id = item["client_id"]
+                user_id = item["user_id"]
 
-            return meeting_id, first_timestamp, last_timestamp, client_id
+            return meeting_id, first_timestamp, last_timestamp, user_id
