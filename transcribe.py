@@ -9,7 +9,7 @@ from app.database_redis.connection import get_redis_client
 
 from app.services.audio.redis import Transcriber,Meeting,best_covering_connection
 
-from datetime import datetime,timezone
+from datetime import datetime,timezone, timedelta
 
 from app.services.audio import AudioSlicer
 
@@ -49,10 +49,9 @@ async def process(redis_client, model, max_length=240) -> None:
     transcription = transcription(meeting_id,redis_client,result)
     transcription.lpush()
     
-    end_of_last_speech = result[-1][-1]['end']
+    end_of_last_speech = timedelta(seconds=result[-1][-1]['end'])
     
-    
-    meeting.transcribe_seek_timestamp = end_of_last_speech+meeting.start_timestamp
+    meeting.transcribe_seek_timestamp = end_of_last_speech+meeting.transcribe_seek_timestamp 
     transcriber.remove(meeting.id)
     meeting.update_redis()
 
