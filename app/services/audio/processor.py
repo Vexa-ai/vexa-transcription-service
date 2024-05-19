@@ -39,12 +39,12 @@ class Processor:
 
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
             diarizer = Diarizer(redis_client)
-            await diarizer.add_todo(meeting.id)
+            await diarizer.add_todo(meeting.meeting_id)
             meeting.update_timestamps(segment_start_timestamp, diarizer_last_updated_timestamp=current_time)
 
         if (current_time - meeting.transcriber_last_updated_timestamp).seconds > transcriber_step:
             transcriber = Transcriber(redis_client)
-            await transcriber.add_todo(meeting.id)
+            await transcriber.add_todo(meeting.meeting_id)
             meeting.update_timestamps(segment_start_timestamp, transcriber_last_updated_timestamp=current_time)
 
     async def __writestream2file(self, connection_id):
