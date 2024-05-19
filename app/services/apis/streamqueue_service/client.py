@@ -70,7 +70,7 @@ class StreamQueueServiceAPI(BaseAPI):
             #     return {"error": "An error occurred while requesting chunks", "exception": str(e)}
 
     async def health(self) -> bool:
-        raw_data = await self._process_request(method=HTTPMethod.GET, url=str(settings.audio_service_health))
+        raw_data = await self._process_request(method=HTTPMethod.GET, url=settings.stream_queue_service_health)
         health_info = Health(**raw_data)
         return health_info.is_available
 
