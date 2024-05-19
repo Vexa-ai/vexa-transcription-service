@@ -87,7 +87,9 @@ class StreamQueueServiceAPI(BaseAPI):
 
         except ConnectTimeout as ex:
             logger.error(ex)
-            raise StreamQueueServiceTimeoutError(f"{ex} (timeout={settings.audio_service_request_timeout})") from ex
+            raise StreamQueueServiceTimeoutError(
+                f"{ex} (timeout={settings.stream_queue_service_request_timeout})"
+            ) from ex
 
         except (ConnectError, ConnectTimeout, ProxyError, ReadTimeout) as ex:
             logger.error(ex)

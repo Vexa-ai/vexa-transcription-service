@@ -6,7 +6,7 @@ from app.settings import settings
 router = APIRouter(prefix="/tools", tags=["tools"])
 
 
-@router.post("/flush_cache")
+@router.post("/flush-cache")
 async def flush_cache():
     client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
     await client.flushdb()

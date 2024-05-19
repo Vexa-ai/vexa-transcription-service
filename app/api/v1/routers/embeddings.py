@@ -7,7 +7,7 @@ from app.settings import settings
 router = APIRouter(prefix="/embeddings", tags=["embeddings"])
 
 
-@router.get("")
+@router.get("/all")
 async def get_embeddings(limit: int = 100):
     client = RedisDAL(await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password))
     embeddings = await client.get_embeddings(limit)

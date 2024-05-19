@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime,timezone
+from datetime import datetime, timezone
 
 from app.database_redis.connection import get_redis_client
 from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
@@ -25,12 +25,13 @@ class Processor:
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
-        meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(connection_id)
+        meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(
+            connection_id
+        )
         current_time = datetime.now(timezone.utc)
 
         connection = Connection(redis_client, connection_id, user_id)
         connection.update_timestamps(segment_start_timestamp, segment_end_timestamp)
-
 
         meeting = Meeting(redis_client, meeting_id)
         await meeting.load_from_redis()
