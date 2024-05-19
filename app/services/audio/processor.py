@@ -45,12 +45,14 @@ class Processor:
 
             diarizer = Diarizer(redis_client)
             diarizer.add_todo(meeting.id)
+            meeting.update_timestamps(segment_start_timestamp, diarizer_last_updated_timestamp=current_time)
+            
+            
 
         if (current_time - meeting.transcriber_last_updated_timestamp) > transcriber_step:
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.id)
-
-        meeting.update_timestamps(segment_start_timestamp, current_time)
+            meeting.update_timestamps(segment_start_timestamp, transcriber_last_updated_timestamp=current_time)
 
     async def __writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"
