@@ -168,16 +168,19 @@ class Meeting:
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
 
-    def update_timestamps(
-        self, segment_start_timestamp, transcriber_last_updated_timestamp=None, diarizer_last_updated_timestamp=None
-    ):
+    def update_diarizer_timestamp(self, segment_start_timestamp, diarizer_last_updated_timestamp):
+        self.load_from_redis()
+        self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
+        self.diarizer_last_updated_timestamp = (
+            diarizer_last_updated_timestamp if diarizer_last_updated_timestamp else None
+        )
+        self.update_redis()
+
+    def update_transcriber_timestamp(self, segment_start_timestamp, transcriber_last_updated_timestamp):
         self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
         self.transcriber_last_updated_timestamp = (
             transcriber_last_updated_timestamp if transcriber_last_updated_timestamp else None
-        )
-        self.diarizer_last_updated_timestamp = (
-            diarizer_last_updated_timestamp if diarizer_last_updated_timestamp else None
         )
         self.update_redis()
 
