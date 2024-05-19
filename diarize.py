@@ -120,7 +120,7 @@ async def process(redis_client, pipeline, max_length=240):
         logger.info("No embeddings found, skipping...")
         return
     
-    speakers = [await process_speaker_emb(e, redis_client, meeting_id) for e in embeddings]
+    speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
 
 
     segments = [i for i in output.itertracks(yield_label=True)]
