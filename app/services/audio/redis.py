@@ -137,7 +137,7 @@ class Meeting:
         self,
         data: dict,
         field_name: str,
-        default_value: Optional[Any] = datetime.datetime(year=1970, month=1, day=1),
+        default_value: Optional[Any] = None,
     ):
         # replace from redis only if none
         value = data.get(field_name)
@@ -151,7 +151,7 @@ class Meeting:
     async def load_from_redis(self):
         data = await self.redis.hgetall(self.metadata_type_)
         for t in self.timestamps:
-            await self._load_field(data, t, self.start_timestamp)
+            await self._load_field(data, t, self.start_timestamp or datetime.datetime(year=1970, month=1, day=1))
 
     async def add_connection(self, connection_id):
         await self.redis.sadd(self.connections_type_, connection_id)
