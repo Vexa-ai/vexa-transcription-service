@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -10,9 +11,9 @@ from typing import (
 )
 
 from redis.asyncio.client import Redis
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Data:
@@ -141,7 +142,6 @@ class Meeting:
     ):
         # replace from redis only if none
         value = data.get(field_name)
-        logger.info(f'{field_name}={value} ({type(value)}) - defailt {default_value}')
         setattr(self, field_name, value if value is not None else default_value)
 
     async def update_redis(self):
@@ -168,21 +168,21 @@ class Meeting:
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
 
-    def update_diarizer_timestamp(self, segment_start_timestamp, diarizer_last_updated_timestamp):
-        self.load_from_redis()
+    async def update_diarizer_timestamp(self, segment_start_timestamp, diarizer_last_updated_timestamp):
+        await self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
         self.diarizer_last_updated_timestamp = (
             diarizer_last_updated_timestamp if diarizer_last_updated_timestamp else None
         )
-        self.update_redis()
+        await self.update_redis()
 
-    def update_transcriber_timestamp(self, segment_start_timestamp, transcriber_last_updated_timestamp):
-        self.load_from_redis()
+    async def update_transcriber_timestamp(self, segment_start_timestamp, transcriber_last_updated_timestamp):
+        await self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
         self.transcriber_last_updated_timestamp = (
             transcriber_last_updated_timestamp if transcriber_last_updated_timestamp else None
         )
-        self.update_redis()
+        await self.update_redis()
 
 
 class ProcessorManager:
