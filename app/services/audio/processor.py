@@ -16,6 +16,7 @@ class Processor:
         self.__stream_queue_service_api = StreamQueueServiceAPI()
 
     async def process_connections(self):
+        logger.info("Process connections...")
         connections = await self.__stream_queue_service_api.get_connections()
         connection_ids = [c[0] for c in connections]
 
