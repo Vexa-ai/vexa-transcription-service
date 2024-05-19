@@ -132,7 +132,7 @@ class Meeting:
     async def _update_field(self, field_name: str, value: Optional[Any]):
         # update redis only if not none
         if value is not None:
-            await self.redis.hset(self.metadata_type_, field_name, value)
+            await self.redis.hset(self.metadata_type_, field_name, value.isoformat())
 
     async def _load_field(
         self,
