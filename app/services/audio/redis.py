@@ -10,7 +10,9 @@ from typing import (
 )
 
 from redis.asyncio.client import Redis
+import logging
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Data:
@@ -139,6 +141,7 @@ class Meeting:
     ):
         # replace from redis only if none
         value = data.get(field_name)
+        logger.info(f'{field_name}={value} ({type(value)}) - defailt {default_value}')
         setattr(self, field_name, value if value is not None else default_value)
 
     async def update_redis(self):
