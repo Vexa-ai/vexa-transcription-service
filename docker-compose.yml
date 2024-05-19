@@ -11,7 +11,7 @@ services:
     image: redis:latest
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT}:6379"  #needs to be exposed outside for remote connection of the main server
+      - "${REDIS_IMAGE_PORT}:6379"  #needs to be exposed outside for remote connection of the main server
     volumes:
       - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
 
