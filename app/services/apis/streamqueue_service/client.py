@@ -51,7 +51,7 @@ class StreamQueueServiceAPI(BaseAPI):
     async def fetch_chunks(self, connection_id: str, num_chunks: int) -> Any:
         data = await self._process_request(
             method=HTTPMethod.GET,
-            url=settings.stream_queue_service_get_next_chunks + f"/{connection_id}",
+            url=f"{settings.stream_queue_service_get_next_chunks}/{connection_id}",
             params={
                 "service_token": settings.stream_queue_service_auth_token,
                 "num_chunks": num_chunks,

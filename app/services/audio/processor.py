@@ -51,6 +51,7 @@ class Processor:
     async def __writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"
         first_timestamp = None
+        logger.warning(path)
         items = await self.__stream_queue_service_api.fetch_chunks(connection_id, num_chunks=100)
 
         if items:
