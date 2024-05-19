@@ -1,3 +1,4 @@
+import datetime
 import json
 from dataclasses import dataclass
 from typing import (
@@ -115,7 +116,7 @@ class Meeting:
         self.diarizer_seek_timestamp: Optional[Any] = None
         self.transcriber_seek_timestamp: Optional[Any] = None
         self.transcriber_last_updated_timestamp: Optional[Any] = None
-        self.diarizer_last_updated_timestamp: Optional[Any] = None
+        self.diarizer_last_updated_timestamp: Optional[Any] = datetime.datetime(year=1970, month=1, day=1)
 
         self.timestamps = [
             "start_timestamp",
