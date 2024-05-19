@@ -90,16 +90,16 @@ class Connection:
         if self.user_id is not None:
             self.redis.hset(self.type_, "user_id", self.user_id)
 
-    def load_from_redis(self):
-        data = self.redis.hgetall(self.type_)
+    async def load_from_redis(self):
+        data = await self.redis.hgetall(self.type_)
         self.start_timestamp = data.get("start_timestamp")
         self.user_id = data.get("user_id")
 
     def delete_connection_data(self):
         self.redis.delete(self.type_)
 
-    def update_timestamps(self, segment_start_timestamp, end_timestamp):
-        self.load_from_redis()
+    async def update_timestamps(self, segment_start_timestamp, end_timestamp):
+        await self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if not self.start_timestamp else self.start_timestamp
         self.end_timestamp = end_timestamp
         self.update_redis()
@@ -147,10 +147,10 @@ class Meeting:
     def add_connection(self, connection_id):
         self.redis.sadd(self.connections_type_, connection_id)
 
-    def get_connections(self):
+    async def get_connections(self):
         connection_ids = self.redis.smembers(self.connections_type_)
         connections = [Connection(self.redis, id) for id in connection_ids]
-        return [c.load_from_redis() for c in connections]
+        return [await c.load_from_redis() for c in connections]
 
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)

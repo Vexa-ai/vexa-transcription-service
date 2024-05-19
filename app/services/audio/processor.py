@@ -32,7 +32,7 @@ class Processor:
         current_time = datetime.now(timezone.utc)
 
         connection = Connection(redis_client, connection_id, user_id)
-        connection.update_timestamps(segment_start_timestamp, segment_end_timestamp)
+        await connection.update_timestamps(segment_start_timestamp, segment_end_timestamp)
 
         meeting = Meeting(redis_client, meeting_id)
         await meeting.load_from_redis()
