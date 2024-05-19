@@ -36,7 +36,7 @@ class Processor:
 
         meeting = Meeting(redis_client, meeting_id)
         await meeting.load_from_redis()
-        meeting.add_connection(connection.id)
+        await meeting.add_connection(connection.id)
 
         if (current_time - meeting.diarizer_last_updated_timestamp) > diarizer_step:
             diarizer = Diarizer(redis_client)

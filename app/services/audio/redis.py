@@ -84,11 +84,11 @@ class Connection:
         self.end_timestamp = None
         self.user_id = user_id
 
-    def update_redis(self):
+    async def update_redis(self):
         if self.start_timestamp is not None:
-            self.redis.hset(self.type_, "start_timestamp", self.start_timestamp)
+            await self.redis.hset(self.type_, "start_timestamp", self.start_timestamp)
         if self.user_id is not None:
-            self.redis.hset(self.type_, "user_id", self.user_id)
+            await self.redis.hset(self.type_, "user_id", self.user_id)
 
     async def load_from_redis(self):
         data = await self.redis.hgetall(self.type_)
@@ -102,7 +102,7 @@ class Connection:
         await self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if not self.start_timestamp else self.start_timestamp
         self.end_timestamp = end_timestamp
-        self.update_redis()
+        await self.update_redis()
 
 
 class Meeting:
@@ -144,8 +144,8 @@ class Meeting:
         for t in self.timestamps:
             await self._load_field(data, t, self.start_timestamp)
 
-    def add_connection(self, connection_id):
-        self.redis.sadd(self.connections_type_, connection_id)
+    async def add_connection(self, connection_id):
+        await self.redis.sadd(self.connections_type_, connection_id)
 
     async def get_connections(self):
         connection_ids = self.redis.smembers(self.connections_type_)
