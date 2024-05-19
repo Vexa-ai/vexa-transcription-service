@@ -24,7 +24,6 @@ class Processor:
 
         await asyncio.sleep(2)
 
-
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
@@ -39,18 +38,14 @@ class Processor:
         await meeting.load_from_redis()
 
         meeting.add_connection(connection.id)
-        
+
         current_time = datetime.utcnow()
-
-
-
 
         if (current_time - meeting.last_updated_timestamp) > diarizer_step:
 
             diarizer = Diarizer(redis_client)
             diarizer.add_todo(meeting.id)
-            
-            
+
         if (current_time - meeting.last_updated_timestamp) > transcriber_step:
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.id)
@@ -80,6 +75,3 @@ class Processor:
                 client_id = item["client_id"]
 
             return meeting_id, first_timestamp, last_timestamp, client_id
-
-
-
