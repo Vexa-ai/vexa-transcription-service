@@ -4,7 +4,7 @@ alembic==1.12.1
 asyncpg==0.29.0
 fastapi==0.110.1
 httpx==0.26.0
-instructor==0.5.2
+instructor==1.2.0
 ipykernel
 numpy==1.26.4
 pydub==0.25.1
