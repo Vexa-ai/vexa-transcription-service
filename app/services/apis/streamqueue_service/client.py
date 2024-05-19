@@ -54,7 +54,7 @@ class StreamQueueServiceAPI(BaseAPI):
             url=f"{settings.stream_queue_service_get_next_chunks}/{connection_id}",
             params={
                 "service_token": settings.stream_queue_service_auth_token,
-                "num_chunks": num_chunks,
+                "limit": num_chunks,
             },
             timeout=settings.stream_queue_service_request_timeout,
         )
