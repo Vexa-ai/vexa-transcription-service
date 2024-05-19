@@ -18,12 +18,10 @@ class Processor:
     async def process_connections(self):
         logger.info("Process connections...")
         connections = await self.__stream_queue_service_api.get_connections()
-        logger.info(f'get_connections: {connections}')
         connection_ids = [c[0] for c in connections]
 
         for connection_id in connection_ids:
-            logger.info(connection_id)
-            await self._process_connection_task(self, connection_id)
+            await self._process_connection_task(connection_id)
 
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
@@ -53,7 +51,6 @@ class Processor:
     async def __writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"
         first_timestamp = None
-        logger.warning(path)
         items = await self.__stream_queue_service_api.fetch_chunks(connection_id, num_chunks=100)
 
         if items:
