@@ -116,7 +116,7 @@ class Meeting:
         self.diarizer_seek_timestamp: Optional[Any] = None
         self.transcriber_seek_timestamp: Optional[Any] = None
         self.transcriber_last_updated_timestamp: Optional[Any] = None
-        self.diarizer_last_updated_timestamp: Optional[Any] = datetime.datetime(year=1970, month=1, day=1)
+        self.diarizer_last_updated_timestamp: Optional[Any] = None
 
         self.timestamps = [
             "start_timestamp",
@@ -131,7 +131,12 @@ class Meeting:
         if value is not None:
             await self.redis.hset(self.metadata_type_, field_name, value)
 
-    async def _load_field(self, data: dict, field_name: str, default_value: Optional[Any] = None):
+    async def _load_field(
+        self,
+        data: dict,
+        field_name: str,
+        default_value: Optional[Any] = datetime.datetime(year=1970, month=1, day=1),
+    ):
         # replace from redis only if none
         value = data.get(field_name)
         setattr(self, field_name, value if value is not None else default_value)
