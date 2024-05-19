@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  qdrant:
-    image: qdrant/qdrant
-    restart: unless-stopped
-    volumes:
-      - ${VOLUME_DATA_PATH}/qdrant:/qdrant/storage
+#  qdrant:
+#    image: qdrant/qdrant
+#    restart: unless-stopped
+#    volumes:
+#      - ${VOLUME_DATA_PATH}/qdrant:/qdrant/storage
 
   redis:
     image: redis:latest
@@ -15,43 +15,43 @@ services:
     volumes:
       - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
 
-  diarize:
-    depends_on:
-      - qdrant
-    command: tail -f /dev/null
-    #command: ['python3','diarize.py']
+#  diarize:
+#    depends_on:
+#      - qdrant
+#    command: tail -f /dev/null
+#    #command: ['python3','diarize.py']
+#
+#    build:
+#      context: docker
+#      dockerfile: DiarizeDockerfile
+#    #image: diarize:0.2
+#    restart: unless-stopped
+#    runtime: nvidia
+#    volumes:
+#      - .:/usr/src/app
+#      - ../library:/usr/src/library
+#      - ${VOLUME_DATA_PATH}/audio:/audio
+#      - ${VOLUME_DATA_PATH}/logs:/logs
+#      - /var/run/docker.sock:/var/run/docker.sock
 
-    build:
-      context: docker
-      dockerfile: DiarizeDockerfile
-    #image: diarize:0.2
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
-      - ${VOLUME_DATA_PATH}/logs:/logs
-      - /var/run/docker.sock:/var/run/docker.sock
 
-
-  transcribe:
-    #command: ['python3','transcribe.py']
-    command: tail -f /dev/null
-
-    #build:
-      # context: docker
-      # dockerfile: TranscribeDockerfile
-      ### error  libcublas.so.12 is not found or cannot be loaded
-    image: transcribe:0.1
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
-      - ${VOLUME_DATA_PATH}/logs:/logs
-      - /var/run/docker.sock:/var/run/docker.sock
+#  transcribe:
+#    #command: ['python3','transcribe.py']
+#    command: tail -f /dev/null
+#
+#    #build:
+#      # context: docker
+#      # dockerfile: TranscribeDockerfile
+#      ### error  libcublas.so.12 is not found or cannot be loaded
+#    image: transcribe:0.1
+#    restart: unless-stopped
+#    runtime: nvidia
+#    volumes:
+#      - .:/usr/src/app
+#      - ../library:/usr/src/library
+#      - ${VOLUME_DATA_PATH}/audio:/audio
+#      - ${VOLUME_DATA_PATH}/logs:/logs
+#      - /var/run/docker.sock:/var/run/docker.sock
 
   api:
     #image: audio_api
