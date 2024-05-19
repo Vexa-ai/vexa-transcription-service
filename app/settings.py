@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     service_api_port: int = 8000
     service_token: str = "service_token"
 
-    check_and_process_connections_interval_sec: Optional[float] = None
+    check_and_process_connections_interval_sec: float = 10.0
 
     stream_queue_service_list_connections: str
     stream_queue_service_flush_cache: str
