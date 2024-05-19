@@ -90,3 +90,4 @@ services:
     volumes:
       - .:/usr/src/app
       - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
