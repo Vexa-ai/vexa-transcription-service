@@ -33,9 +33,9 @@ async def process(redis_client, model, max_length=240) -> None:
     await meeting.load_from_redis()
     seek = meeting.transcribe_seek_timestamp - meeting.start_timestamp
     
-    current_time = datetime.now(timezone.utc)
     
-    connection = best_covering_connection(seek,current_time,meeting.get_connections())
+    
+    connection = best_covering_connection(seek,meeting.start_timestamp,meeting.get_connections())
     audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, seek + max_length)
 
     audio_data = await audio_slicer.export_data()
@@ -49,8 +49,10 @@ async def process(redis_client, model, max_length=240) -> None:
     transcription = transcription(meeting_id,redis_client,result)
     transcription.lpush()
     
+    end_of_last_speech = result[-1][-1]['end']
     
-    meeting.transcribe_seek_timestamp = result.max_timestamp+current_time #result.max_timestamp is hypothetic last timestamp in results which nneds to be determined from life data
+    
+    meeting.transcribe_seek_timestamp = end_of_last_speech+meeting.start_timestamp
     transcriber.remove(meeting.id)
     meeting.update_redis()
 
