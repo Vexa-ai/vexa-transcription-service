@@ -37,12 +37,12 @@ class Processor:
         await meeting.load_from_redis()
         await meeting.add_connection(connection.id)
 
-        if (current_time - meeting.diarizer_last_updated_timestamp) > diarizer_step:
+        if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
             diarizer = Diarizer(redis_client)
             await diarizer.add_todo(meeting.id)
             meeting.update_timestamps(segment_start_timestamp, diarizer_last_updated_timestamp=current_time)
 
-        if (current_time - meeting.transcriber_last_updated_timestamp) > transcriber_step:
+        if (current_time - meeting.transcriber_last_updated_timestamp).seconds > transcriber_step:
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.id)
             meeting.update_timestamps(segment_start_timestamp, transcriber_last_updated_timestamp=current_time)
