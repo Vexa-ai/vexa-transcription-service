@@ -32,6 +32,37 @@ class Data:
     
     async def delete(self):
         return bool(await self.redis_client.delete(self.key))
+    
+    # async def rpop_many(self, key: str, limit: int = 1, raise_exception: bool = False) -> Any:
+    #     """Retrieves a specified number of audio chunks from this connection's queue in a FIFO manner using RPOP.
+
+    #     Args:
+    #         key: Key for getting data.
+    #         limit: ToDo.
+    #         raise_exception: ToDo.
+
+    #     Returns:
+    #         Data from redis converted to JSON.
+
+    #     """
+    #     # ToDo:
+    #     #  if error put data in redis again
+    #     #  if error_count > 5 put data in difference
+    #     chunks = []
+
+    #     # Continuously remove items from the right end of the list (end of the list)
+    #     for _ in range(limit):
+    #         chunk = await self.__redis_client.rpop(key)
+    #         if chunk:
+    #             chunks.append(json.loads(chunk))
+    #         else:
+    #             break  # Exit if the list becomes empty before reaching num_items
+
+    #     if chunks:
+    #         return chunks
+
+    #     if raise_exception:
+    #         raise DataNotFoundError(f"Data for '{key}' not found")
 
 class Transcript(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):

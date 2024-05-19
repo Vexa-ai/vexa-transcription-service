@@ -47,6 +47,7 @@ class Processor:
         meeting.add_connection(connection.id)
         
         
+        #TODO:reconsider timestamp logic
         if datetime.utcnow() - max(meeting.last_updated_timestamp, meeting.diarize_seek_timestamp) > diarizer_step:
             diarizer = Diarizer(redis_client)
             diarizer.add_todo(meeting.id)

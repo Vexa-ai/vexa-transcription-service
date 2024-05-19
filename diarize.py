@@ -131,7 +131,7 @@ async def process(redis_client, pipeline, max_length=240):
     result = df.drop(columns=["speaker_id"]).to_dict("records")
 
 
-    diarization = diarization(meeting_id)
+    diarization = Diarisation(meeting_id)
     diarization.lpush()
     
     #TODO: apply absoute timestamp logic instead of start and store to meeting.start_timestamp
