@@ -24,7 +24,7 @@ switch to stream api instread of redis
 
 
 
-# docker compose -f /home/dima/0/0_stream/docker-compose.yml -p dev_0 up -d;
-# docker compose -f /home/dima/0/1_audio/docker-compose.yml -p dev_1 up -d;
-# docker compose -f /home/dima/0/2_engine/docker-compose.yml -p dev_2 up -d;
+# docker compose -f /home/dima/0/0_stream/docker-compose.yml -p dev_dima_0 up -d;
+# docker compose -f /home/dima/0/1_audio/docker-compose.yml -p dev_dima_1 up -d;
+# docker compose -f /home/dima/0/2_engine/docker-compose.yml -p dev_dima_2 up -d;
 
