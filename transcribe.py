@@ -1,7 +1,7 @@
 import asyncio
 import io
 import logging
-from datetime import timedelta
+from datetime import timedelta,datetime,timezone
 
 from faster_whisper import WhisperModel
 from app.services.audio.redis import Transcript
@@ -13,10 +13,8 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# TODO: implement recurrent prompt from last item
 
-
-async def process(redis_client, model, max_length=240) -> None:
+async def process(redis_client, model, max_length=240,overlap = 2) -> None:
     transcriber = Transcriber(redis_client)
     meeting_id = await transcriber.pop_inprogress()
 
@@ -25,10 +23,13 @@ async def process(redis_client, model, max_length=240) -> None:
 
     meeting = Meeting(redis_client, meeting_id)
     await meeting.load_from_redis()
-    seek = meeting.transcribe_seek_timestamp - meeting.start_timestamp
+    seek = meeting.transcriber_seek_timestamp - meeting.start_timestamp
+    current_time = datetime.now(timezone.utc)
 
-    connection = best_covering_connection(seek, meeting.start_timestamp, meeting.get_connections())
-    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, seek + max_length)
+    connections = await meeting.get_connections()
+    connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
+    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
+    slice_duration = audio_slicer.audio.duration_seconds
     audio_data = await audio_slicer.export_data()
 
     segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
@@ -37,10 +38,9 @@ async def process(redis_client, model, max_length=240) -> None:
     result = [[w._asdict() for w in s.words] for s in segments]
     transcription = Transcript(meeting_id, redis_client, result)
     await transcription.lpush()
-    end_of_last_speech = timedelta(seconds=result[-1][-1]["end"])
 
-    meeting.transcribe_seek_timestamp = end_of_last_speech + meeting.transcribe_seek_timestamp
-    await transcriber.remove(meeting.id)
+    meeting.transcribe_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
+    await transcriber.remove(meeting.meeting_id)
     await meeting.update_redis()
 
 
