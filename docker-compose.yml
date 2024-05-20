@@ -84,7 +84,8 @@ services:
       STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
       STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
 
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
+      # command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
+      command: tail -f /dev/null
     extra_hosts:
       - "host.docker.internal:host-gateway" # to connect to host ports
     volumes:
