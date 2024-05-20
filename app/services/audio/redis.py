@@ -92,13 +92,13 @@ class Connection:
 
     async def update_redis(self):
         if self.start_timestamp is not None:
-            await self.redis.hset(self.type_, "start_timestamp", self.start_timestamp)
+            await self.redis.hset(self.type_, "start_timestamp", self.start_timestamp.isoformat())
         if self.user_id is not None:
             await self.redis.hset(self.type_, "user_id", self.user_id)
 
     async def load_from_redis(self):
         data = await self.redis.hgetall(self.type_)
-        self.start_timestamp = data.get("start_timestamp")
+        self.start_timestamp = datetime.datetime.strptime(data.get("start_timestamp"), "%Y-%m-%dT%H:%M:%S.%f")
         self.user_id = data.get("user_id")
 
     def delete_connection_data(self):
