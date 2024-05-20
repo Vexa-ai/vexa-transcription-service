@@ -1,5 +1,16 @@
 """Keys of redis storage."""
 
+# ============ Attrs names ========
+START_TIMESTAMP = "start_timestamp"
+END_TIMESTAMP = "end_timestamp"
+DIARIZE_SEEK_TIMESTAMP = "diarize_seek_timestamp"
+TRANSCRIBE_SEEK_TIMESTAMP = "transcribe_seek_timestamp"
+TRANSCRIBER_LAST_UPDATED_TIMESTAMP = "transcriber_last_updated_timestamp"
+DIARIZER_LAST_UPDATED_TIMESTAMP = "diarizer_last_updated_timestamp"
+
+# ============ Keys names ========
+CONNECTION = "connection"
+MEETING = "meeting"
 SPEAKER_EMBEDDINGS = "Embeddings"  # speaker_id + speaker's embeddings
 
 SEGMENTS_TRANSCRIBE = "Transcript"  # store of Transcriber's results

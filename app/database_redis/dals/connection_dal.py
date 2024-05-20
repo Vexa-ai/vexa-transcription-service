@@ -1,32 +1,33 @@
+from datetime import datetime
+
+from app.database_redis import keys
 from app.database_redis.dals.base import BaseDAL
 
 
 class ConnectionDAL(BaseDAL):
-    def __init__(self, client, connection_id, user_id=None):
-        super().__init__(client)
-        self.id = connection_id
-        self.type_ = f"connection:{connection_id}"
-        self.path = f"/audio/{connection_id}.webm"
-        self.start_timestamp = None
-        self.end_timestamp = None
-        self.user_id = user_id
+    """Class for work with connection's data in Redis."""
 
-    async def update_redis(self):
-        if self.start_timestamp is not None:
-            await self.redis.hset(self.type_, "start_timestamp", self.start_timestamp)
-        if self.user_id is not None:
-            await self.redis.hset(self.type_, "user_id", self.user_id)
+    CONNECTION_KEY_NAME = keys.CONNECTION
 
-    async def load_from_redis(self):
-        data = await self.redis.hgetall(self.type_)
-        self.start_timestamp = data.get("start_timestamp")
-        self.user_id = data.get("user_id")
+    async def get_connection_data(self, connection_id: str) -> tuple:
+        data = await self._redis_client.hgetall(f"{self.CONNECTION_KEY_NAME}:{connection_id}")
+        start_timestamp = datetime.fromisoformat(data.get(keys.START_TIMESTAMP))
+        end_timestamp = datetime.fromisoformat(data.get(keys.END_TIMESTAMP))
+        return start_timestamp, end_timestamp
 
-    def delete_connection_data(self):
-        self.redis.delete(self.type_)
+    async def set_start_timestamp(self, connection_id: str, start_timestamp: datetime) -> None:
+        await self._redis_client.hset(
+            f"{self.CONNECTION_KEY_NAME}:{connection_id}",
+            keys.START_TIMESTAMP,
+            start_timestamp.isoformat(),
+        )
 
-    async def update_timestamps(self, segment_start_timestamp, end_timestamp):
-        await self.load_from_redis()
-        self.start_timestamp = segment_start_timestamp if not self.start_timestamp else self.start_timestamp
-        self.end_timestamp = end_timestamp
-        await self.update_redis()
+    async def set_end_timestamp(self, connection_id: str, start_timestamp: datetime) -> None:
+        await self._redis_client.hset(
+            f"{self.CONNECTION_KEY_NAME}:{connection_id}",
+            keys.END_TIMESTAMP,
+            start_timestamp.isoformat(),
+        )
+
+    def delete_connection_data(self, connection_id: str) -> None:
+        self.delete_keys(f"{self.CONNECTION_KEY_NAME}:{connection_id}")

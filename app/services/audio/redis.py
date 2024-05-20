@@ -84,11 +84,11 @@ class Connection:
     def __init__(self, redis_client: Redis, connection_id, user_id=None):
         self.redis = redis_client
         self.id = connection_id
+        self.user_id = user_id
         self.type_ = f"connection:{connection_id}"
-        self.path = f"/audio/{connection_id}.webm"
+
         self.start_timestamp = None
         self.end_timestamp = None
-        self.user_id = user_id
 
     async def update_redis(self):
         if self.start_timestamp is not None:
@@ -117,12 +117,12 @@ class Meeting:
         self.meeting_id = meeting_id
         self.metadata_type_ = f"meeting:{meeting_id}:metadata"
         self.connections_type_ = f"meeting:{meeting_id}:connections"
-        self.start_timestamp: Optional[Any] = None
-        self.diarizer_seek_timestamp: Optional[Any] = None
-        self.transcriber_seek_timestamp: Optional[Any] = None
-        self.transcriber_last_updated_timestamp: Optional[Any] = None
-        self.diarizer_last_updated_timestamp: Optional[Any] = None
 
+        self.start_timestamp: Optional[datetime] = None
+        self.diarizer_seek_timestamp: Optional[datetime] = None
+        self.transcriber_seek_timestamp: Optional[datetime] = None
+        self.transcriber_last_updated_timestamp: Optional[datetime] = None
+        self.diarizer_last_updated_timestamp: Optional[datetime] = None
         self.timestamps = [
             "start_timestamp",
             "diarize_seek_timestamp",
@@ -131,7 +131,7 @@ class Meeting:
             "diarizer_last_updated_timestamp",
         ]
 
-    async def _update_field(self, field_name: str, value: Optional[Any]):
+    async def _update_field(self, field_name: str, value: Optional[datetime]):
         # update redis only if not none
         if value is not None:
             await self.redis.hset(self.metadata_type_, field_name, value.isoformat())
@@ -144,11 +144,11 @@ class Meeting:
     ):
         # replace from redis only if none
         value = data.get(field_name)
-        set_value = default_value
-        if value is not None:
-            set_value = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f")
-
-        setattr(self, field_name, set_value, )
+        setattr(
+            self,
+            field_name,
+            datetime.datetime.fromisoformat(value) if value is not None else default_value,
+        )
 
     async def update_redis(self):
         for t in self.timestamps:
@@ -198,7 +198,7 @@ class ProcessorManager:
         await self.redis.sadd(self.todo_type_, task_id)
 
     async def pop_inprogress(self) -> Union[str, None]:
-        task_id = await self.redis.spop(self.todo_type_)
+        task_id = self.redis.spop(self.todo_type_)
         if task_id:
             await self.redis.sadd(self.in_progress_type_, task_id)
         return task_id

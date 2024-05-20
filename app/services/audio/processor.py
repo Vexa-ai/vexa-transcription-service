@@ -1,7 +1,10 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from redis.asyncio import Redis
 
 from app.database_redis.connection import get_redis_client
+from app.database_redis.dals.connection_dal import ConnectionDAL
 from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
 from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
@@ -27,8 +30,12 @@ class Processor:
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(
             connection_id
         )
-        segment_start_timestamp = datetime.strptime(segment_start_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ") if segment_start_timestamp else None
-        segment_end_timestamp = datetime.strptime(segment_end_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ") if segment_end_timestamp else None
+        segment_start_timestamp = (
+            datetime.strptime(segment_start_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ") if segment_start_timestamp else None
+        )
+        segment_end_timestamp = (
+            datetime.strptime(segment_end_timestamp, "%Y-%m-%dT%H:%M:%S.%fZ") if segment_end_timestamp else None
+        )
         current_time = datetime.now()
 
         connection = Connection(redis_client, connection_id, user_id)
@@ -36,9 +43,11 @@ class Processor:
 
         meeting = Meeting(redis_client, meeting_id)
         await meeting.load_from_redis()
-        await meeting.add_connection(connection.id)
+        await meeting.add_connection(connection_id)
         meeting.diarizer_last_updated_timestamp = meeting.diarizer_last_updated_timestamp or segment_start_timestamp
-        meeting.transcriber_last_updated_timestamp = meeting.transcriber_last_updated_timestamp or segment_start_timestamp
+        meeting.transcriber_last_updated_timestamp = (
+            meeting.transcriber_last_updated_timestamp or segment_start_timestamp
+        )
 
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
             diarizer = Diarizer(redis_client)
@@ -77,3 +86,18 @@ class Processor:
                 user_id = item["user_id"]
 
             return meeting_id, first_timestamp, last_timestamp, user_id
+
+    @staticmethod
+    async def __save_timestamps(
+        redis_client: Redis,
+        connection_id: str,
+        segment_start_timestamp: datetime,
+        segment_end_timestamp: datetime,
+    ):
+        connection = ConnectionDAL(redis_client)
+        start_timestamp, end_timestamp = await connection.get_connection_data(connection_id)
+        if start_timestamp is None:
+            await connection.set_start_timestamp(connection_id, segment_start_timestamp)
+
+        if end_timestamp is None:
+            await connection.set_end_timestamp(connection_id, segment_end_timestamp)

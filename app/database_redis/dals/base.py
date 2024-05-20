@@ -6,7 +6,6 @@ from typing import Any
 
 from redis.asyncio.client import Redis
 
-from app.database_redis import keys
 from app.database_redis.exceptions import DataNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -16,12 +15,12 @@ class BaseDAL:
     """Class for basic work with Redis (get or put value).
 
     Attributes:
-        __redis_client: An instance of the connection to the Redis.
+        _redis_client: An instance of the connection to the Redis.
 
     """
 
     def __init__(self, client: Redis):
-        self.__redis_client = client
+        self._redis_client = client
 
     async def rpop_many(self, key: str, limit: int = 1, raise_exception: bool = False) -> Any:
         """Retrieves a specified number of audio chunks from this connection's queue in a FIFO manner using RPOP.
@@ -41,7 +40,7 @@ class BaseDAL:
         chunks = []
 
         for _ in range(limit):
-            chunk = await self.__redis_client.rpop(key)
+            chunk = await self._redis_client.rpop(key)
             if chunk:
                 chunks.append(json.loads(chunk))
             else:
@@ -59,14 +58,21 @@ class BaseDAL:
         cursor = "0"
 
         while cursor != 0:
-            cursor, matched_keys = await self.__redis_client.scan(cursor, match=f"{name}{pattern}", count=min_length)
+            cursor, matched_keys = await self._redis_client.scan(cursor, match=f"{name}{pattern}", count=min_length)
             unique_keys.update(matched_keys)
 
         logger.info(f"Found {len(unique_keys)} unique key(s)")
 
         for key in unique_keys:
             for _ in range(limit):
-                value = await self.__redis_client.rpop(key)
+                value = await self._redis_client.rpop(key)
                 matching_queues[key].append(value)
 
         return matching_queues
+
+    def delete_keys(self, name: str):
+        try:
+            self._redis_client.delete(name)
+
+        except Exception as ex:
+            logger.error(f"[{type(ex)}]: {ex}")
