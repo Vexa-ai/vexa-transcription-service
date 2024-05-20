@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import json
 import logging
 from dataclasses import dataclass
@@ -37,7 +37,7 @@ class Data:
             self.data = json.loads(data)
         else:
             self.data = None
-        return bool(data)
+        return data
 
     async def delete(self):
         return bool(await self.redis_client.delete(self.key))

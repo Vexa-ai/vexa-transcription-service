@@ -2,7 +2,7 @@ import asyncio
 import io
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from uuid import uuid4
 
 import pandas as pd
@@ -74,7 +74,7 @@ def parse_segment(segment):
     return segment[0].start, segment[0].end, int(segment[-1].split("_")[1])
 
 
-async def __get_next_chunk_start(diarization_result, length, shift):
+async def get_next_chunk_start(diarization_result, length, shift):
 
     if len(diarization_result) > 0:
         last_speech = diarization_result[-1]
@@ -102,12 +102,14 @@ async def process(redis_client, pipeline, max_length=240):
 
     meeting = Meeting(redis_client, meeting_id)
     await meeting.load_from_redis()
-    seek = meeting.diarize_seek_timestamp - meeting.start_timestamp
+    seek = (meeting.diarizer_seek_timestamp - meeting.start_timestamp).total_seconds()
 
     current_time = datetime.now(timezone.utc)
+    
+    connections = await meeting.get_connections()
 
-    connection = best_covering_connection(seek, current_time, meeting.get_connections())
-    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, seek + max_length)
+    connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
+    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
     slice_duration = audio_slicer.audio.duration_seconds
     audio_data = await audio_slicer.export_data()
 
@@ -128,10 +130,10 @@ async def process(redis_client, pipeline, max_length=240):
     diarization = Diarisation(meeting_id, redis_client, result)
     await diarization.lpush()
 
-    start_ = await __get_next_chunk_start(result, slice_duration, current_time - seek)
-    seek = start_+current_time if start_ else seek + slice_duration
+    seek = await get_next_chunk_start(result, slice_duration, seek)
+    seek = seek or  seek + slice_duration
 
-    meeting.diarize_seek_timestamp = seek
+    meeting.diarize_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
     await diarizer.remove(meeting.meeting_id)
     await meeting.update_redis()
 
