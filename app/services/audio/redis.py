@@ -157,11 +157,7 @@ class Meeting:
     async def load_from_redis(self):
         data = await self.redis.hgetall(self.metadata_type_)
         for t in self.timestamps:
-            await self._load_field(
-                data,
-                t,
-                self.start_timestamp or datetime.datetime(year=1970, month=1, day=1, tzinfo=datetime.timezone.utc),
-            )
+            await self._load_field(data, t, self.start_timestamp)
 
     async def add_connection(self, connection_id):
         await self.redis.sadd(self.connections_type_, connection_id)
