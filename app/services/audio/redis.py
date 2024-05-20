@@ -2,6 +2,9 @@ import datetime
 import json
 import logging
 from dataclasses import dataclass
+from dateutil import parser
+from dateutil.tz import UTC
+
 from typing import (
     Any,
     List,
@@ -15,7 +18,6 @@ from redis.asyncio.client import Redis
 from app.database_redis.keys import SEGMENTS_DIARIZE, SEGMENTS_TRANSCRIBE
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class Data:
@@ -38,68 +40,38 @@ class Data:
     async def delete(self):
         return bool(await self.redis_client.delete(self.key))
 
-    # async def rpop_many(self, key: str, limit: int = 1, raise_exception: bool = False) -> Any:
-    #     """Retrieves a specified number of audio chunks from this connection's queue in a FIFO manner using RPOP.
-
-    #     Args:
-    #         key: Key for getting data.
-    #         limit: ToDo.
-    #         raise_exception: ToDo.
-
-    #     Returns:
-    #         Data from redis converted to JSON.
-
-    #     """
-    #     # ToDo:
-    #     #  if error put data in redis again
-    #     #  if error_count > 5 put data in difference
-    #     chunks = []
-
-    #     # Continuously remove items from the right end of the list (end of the list)
-    #     for _ in range(limit):
-    #         chunk = await self.__redis_client.rpop(key)
-    #         if chunk:
-    #             chunks.append(json.loads(chunk))
-    #         else:
-    #             break  # Exit if the list becomes empty before reaching num_items
-
-    #     if chunks:
-    #         return chunks
-
-    #     if raise_exception:
-    #         raise DataNotFoundError(f"Data for '{key}' not found")
-
-
 class Transcript(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
         super().__init__(key=f"{SEGMENTS_TRANSCRIBE}:{meeting_id}", redis_client=redis_client, data=data)
-
 
 class Diarisation(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
         super().__init__(key=f"{SEGMENTS_DIARIZE}:{meeting_id}", redis_client=redis_client, data=data)
 
-
 class Connection:
     def __init__(self, redis_client: Redis, connection_id, user_id=None):
         self.redis = redis_client
         self.id = connection_id
-        self.user_id = user_id
         self.type_ = f"connection:{connection_id}"
-
+        self.path = f"/audio/{connection_id}.webm"
         self.start_timestamp = None
         self.end_timestamp = None
+        self.user_id = user_id
 
     async def update_redis(self):
         if self.start_timestamp is not None:
             await self.redis.hset(self.type_, "start_timestamp", self.start_timestamp.isoformat())
+        if self.end_timestamp is not None:
+            await self.redis.hset(self.type_, "end_timestamp", self.end_timestamp.isoformat())
         if self.user_id is not None:
             await self.redis.hset(self.type_, "user_id", self.user_id)
 
     async def load_from_redis(self):
         data = await self.redis.hgetall(self.type_)
-        self.start_timestamp = datetime.datetime.strptime(data.get("start_timestamp"), "%Y-%m-%dT%H:%M:%S.%f")
-        self.user_id = data.get("user_id")
+        if data:
+            self.start_timestamp = parser.parse(data.get("start_timestamp")).astimezone(UTC)
+            self.end_timestamp = parser.parse(data.get("end_timestamp")).astimezone(UTC)
+            self.user_id = data.get("user_id")
 
     def delete_connection_data(self):
         self.redis.delete(self.type_)
@@ -110,45 +82,37 @@ class Connection:
         self.end_timestamp = end_timestamp
         await self.update_redis()
 
-
 class Meeting:
     def __init__(self, redis_client: Redis, meeting_id: str):
         self.redis = redis_client
         self.meeting_id = meeting_id
         self.metadata_type_ = f"meeting:{meeting_id}:metadata"
         self.connections_type_ = f"meeting:{meeting_id}:connections"
+        self.start_timestamp: Optional[Any] = None
+        self.diarizer_seek_timestamp: Optional[Any] = None
+        self.transcriber_seek_timestamp: Optional[Any] = None
+        self.transcriber_last_updated_timestamp: Optional[Any] = None
+        self.diarizer_last_updated_timestamp: Optional[Any] = None
 
-        self.start_timestamp: Optional[datetime] = None
-        self.diarizer_seek_timestamp: Optional[datetime] = None
-        self.transcriber_seek_timestamp: Optional[datetime] = None
-        self.transcriber_last_updated_timestamp: Optional[datetime] = None
-        self.diarizer_last_updated_timestamp: Optional[datetime] = None
         self.timestamps = [
             "start_timestamp",
-            "diarize_seek_timestamp",
-            "transcribe_seek_timestamp",
+            "diarizer_seek_timestamp",
+            "transcriber_seek_timestamp",
             "transcriber_last_updated_timestamp",
             "diarizer_last_updated_timestamp",
         ]
 
-    async def _update_field(self, field_name: str, value: Optional[datetime]):
+    async def _update_field(self, field_name: str, value: Optional[Any]):
         # update redis only if not none
         if value is not None:
             await self.redis.hset(self.metadata_type_, field_name, value.isoformat())
 
-    async def _load_field(
-        self,
-        data: dict,
-        field_name: str,
-        default_value: Optional[Any] = None,
-    ):
-        # replace from redis only if none
+    async def _load_field(self, data: dict, field_name: str, default_value: Optional[Any] = None):
         value = data.get(field_name)
-        setattr(
-            self,
-            field_name,
-            datetime.datetime.fromisoformat(value) if value is not None else default_value,
-        )
+        set_value = default_value
+        if value is not None:
+            set_value = parser.parse(value).astimezone(UTC)
+        setattr(self, field_name, set_value)
 
     async def update_redis(self):
         for t in self.timestamps:
@@ -163,9 +127,10 @@ class Meeting:
         await self.redis.sadd(self.connections_type_, connection_id)
 
     async def get_connections(self):
-        connection_ids = self.redis.smembers(self.connections_type_)
+        connection_ids = await self.redis.smembers(self.connections_type_)
         connections = [Connection(self.redis, id) for id in connection_ids]
-        return [await c.load_from_redis() for c in connections]
+        [await c.load_from_redis() for c in connections]
+        return connections
 
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
@@ -186,7 +151,6 @@ class Meeting:
         )
         await self.update_redis()
 
-
 class ProcessorManager:
     def __init__(self, redis_client: Redis, processor_type: Literal["Diarize", "Transcribe"]):
         self.redis = redis_client
@@ -198,7 +162,7 @@ class ProcessorManager:
         await self.redis.sadd(self.todo_type_, task_id)
 
     async def pop_inprogress(self) -> Union[str, None]:
-        task_id = self.redis.spop(self.todo_type_)
+        task_id = await self.redis.spop(self.todo_type_)
         if task_id:
             await self.redis.sadd(self.in_progress_type_, task_id)
         return task_id
@@ -206,24 +170,20 @@ class ProcessorManager:
     async def remove(self, task_id: str):
         await self.redis.srem(self.in_progress_type_, task_id)
 
-
 class Diarizer(ProcessorManager):
     def __init__(self, redis_client: Redis):
         super().__init__(redis_client, "Diarize")
-
 
 class Transcriber(ProcessorManager):
     def __init__(self, redis_client: Redis):
         super().__init__(redis_client, "Transcribe")
 
-
-# funcs to determing  connection that best overlap  the target period
+# funcs to determing connection that best overlap the target period
 def get_timestamps_overlap(start1, end1, start2, end2):
     latest_start = max(start1, start2)
     earliest_end = min(end1, end2)
     delta = (earliest_end - latest_start).total_seconds()
     return max(0, delta)
-
 
 def best_covering_connection(target_start, target_end, connections):
     best_connection = None
