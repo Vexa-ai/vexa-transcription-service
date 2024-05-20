@@ -160,7 +160,7 @@ class Meeting:
             await self._load_field(
                 data,
                 t,
-                self.start_timestamp or datetime.datetime(year=1970, month=1, day=1, tzinfo=datetime.timezone.utc),
+                self.start_timestamp or datetime.datetime(year=1970, month=1, day=1),
             )
 
     async def add_connection(self, connection_id):
