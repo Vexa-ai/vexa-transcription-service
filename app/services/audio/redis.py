@@ -12,6 +12,8 @@ from typing import (
 
 from redis.asyncio.client import Redis
 
+from app.database_redis.keys import SEGMENTS_DIARIZE, SEGMENTS_TRANSCRIBE
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,12 +72,12 @@ class Data:
 
 class Transcript(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
-        super().__init__(key=f"Transcript:{meeting_id}", redis_client=redis_client, data=data)
+        super().__init__(key=f"{SEGMENTS_TRANSCRIBE}:{meeting_id}", redis_client=redis_client, data=data)
 
 
 class Diarisation(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
-        super().__init__(key=f"Diarisation:{meeting_id}", redis_client=redis_client, data=data)
+        super().__init__(key=f"{SEGMENTS_DIARIZE}:{meeting_id}", redis_client=redis_client, data=data)
 
 
 class Connection:
@@ -142,7 +144,11 @@ class Meeting:
     ):
         # replace from redis only if none
         value = data.get(field_name)
-        setattr(self, field_name, value if value is not None else default_value)
+        setattr(
+            self,
+            field_name,
+            datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f") if value is not None else default_value,
+        )
 
     async def update_redis(self):
         for t in self.timestamps:

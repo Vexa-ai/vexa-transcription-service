@@ -2,10 +2,10 @@
 from fastapi import APIRouter, Depends
 
 from app.api.service_token import ServiceToken
-from app.api.v1.routers.embeddings import router as embeddings_router
 from app.api.v1.routers.health import router as health_router
-from app.api.v1.routers.segments import router as segments_router
+from app.api.v1.routers.segment import router as segments_router
 from app.api.v1.routers.service_tools import router as tools_router
+from app.api.v1.routers.speaker import router as embeddings_router
 
 router = APIRouter()
 

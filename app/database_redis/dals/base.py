@@ -1,6 +1,7 @@
 """Module for basic work with radishes (get value, put value, check connection)."""
 import json
 import logging
+from collections import defaultdict
 from typing import Any
 
 from redis.asyncio.client import Redis
@@ -11,7 +12,7 @@ from app.database_redis.exceptions import DataNotFoundError
 logger = logging.getLogger(__name__)
 
 
-class RedisDAL:
+class BaseDAL:
     """Class for basic work with Redis (get or put value).
 
     Attributes:
@@ -21,15 +22,6 @@ class RedisDAL:
 
     def __init__(self, client: Redis):
         self.__redis_client = client
-
-    async def get_embeddings(self, limit: int = 100) -> Any:
-        return await self.rpop_many(key=keys.EMBEDDINGS, limit=limit)
-
-    async def get_diarize_segments(self, limit: int = 100) -> Any:
-        return await self.rpop_many(key=keys.SEGMENTS_DIARIZE, limit=limit)
-
-    async def get_transcribe_segments(self, limit: int = 100) -> Any:
-        return await self.rpop_many(key=keys.SEGMENTS_TRANSCRIBE, limit=limit)
 
     async def rpop_many(self, key: str, limit: int = 1, raise_exception: bool = False) -> Any:
         """Retrieves a specified number of audio chunks from this connection's queue in a FIFO manner using RPOP.
@@ -60,3 +52,21 @@ class RedisDAL:
 
         if raise_exception:
             raise DataNotFoundError(f"Data for '{key}' not found")
+
+    async def rpop_many_by_pattern(self, name: str, min_length: int = 1, limit: int = 1, pattern: str = "*") -> dict:
+        matching_queues = defaultdict(list)
+        unique_keys = set()
+        cursor = "0"
+
+        while cursor != 0:
+            cursor, matched_keys = await self.__redis_client.scan(cursor, match=f"{name}{pattern}", count=min_length)
+            unique_keys.update(matched_keys)
+
+        logger.info(f"Found {len(unique_keys)} unique key(s)")
+
+        for key in unique_keys:
+            for _ in range(limit):
+                value = await self.__redis_client.rpop(key)
+                matching_queues[key].append(value)
+
+        return matching_queues

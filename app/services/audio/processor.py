@@ -24,7 +24,6 @@ class Processor:
 
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(
             connection_id
         )
