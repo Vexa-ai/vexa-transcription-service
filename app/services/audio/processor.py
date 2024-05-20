@@ -27,8 +27,10 @@ class Processor:
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.__writestream2file(
             connection_id
         )
-        segment_start_timestamp = datetime.strptime(segment_start_timestamp, "%Y-%m-%dT%H:%M:%S.%f") if segment_start_timestamp else None
-        segment_end_timestamp = datetime.strptime(segment_end_timestamp, "%Y-%m-%dT%H:%M:%S.%f") if segment_end_timestamp else None
+        logger.info(segment_start_timestamp)
+        logger.info(segment_end_timestamp)
+        segment_start_timestamp = datetime.fromisoformat(segment_start_timestamp) if segment_start_timestamp else None
+        segment_end_timestamp = datetime.fromisoformat(segment_end_timestamp) if segment_end_timestamp else None
         current_time = datetime.now(timezone.utc)
 
         connection = Connection(redis_client, connection_id, user_id)
