@@ -144,11 +144,11 @@ class Meeting:
     ):
         # replace from redis only if none
         value = data.get(field_name)
-        setattr(
-            self,
-            field_name,
-            datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f") if value is not None else default_value,
-        )
+        set_value = default_value
+        if value is not None:
+            set_value = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f")
+
+        setattr(self, field_name, set_value, )
 
     async def update_redis(self):
         for t in self.timestamps:
@@ -160,7 +160,7 @@ class Meeting:
             await self._load_field(
                 data,
                 t,
-                self.start_timestamp or datetime.datetime(year=1970, month=1, day=1),
+                self.start_timestamp or datetime.datetime(year=1970, month=1, day=1, tzinfo=datetime.timezone.utc),
             )
 
     async def add_connection(self, connection_id):
@@ -223,7 +223,6 @@ class Transcriber(ProcessorManager):
 
 # funcs to determing  connection that best overlap  the target period
 def get_timestamps_overlap(start1, end1, start2, end2):
-
     latest_start = max(start1, start2)
     earliest_end = min(end1, end2)
     delta = (earliest_end - latest_start).total_seconds()
@@ -231,7 +230,6 @@ def get_timestamps_overlap(start1, end1, start2, end2):
 
 
 def best_covering_connection(target_start, target_end, connections):
-
     best_connection = None
     max_overlap = 0
 
