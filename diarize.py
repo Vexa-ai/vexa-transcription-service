@@ -129,9 +129,9 @@ async def process(redis_client, pipeline, max_length=240):
     await diarization.lpush()
 
     start_ = await __get_next_chunk_start(result, slice_duration, current_time - seek)
-    start = start_ if start_ else start + slice_duration
+    seek = start_+current_time if start_ else seek + slice_duration
 
-    meeting.diarize_seek_timestamp = start + current_time
+    meeting.diarize_seek_timestamp = seek
     await diarizer.remove(meeting.meeting_id)
     await meeting.update_redis()
 
