@@ -17,7 +17,7 @@ async def get_transcribe_segments(limit: int = 100) -> List[Segment]:
     The number of chunks retrieved can be specified by the num_chunks parameter.
     """
     client = SegmentDAL(await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password))
-    segments_data = await client.get_diarize_segments(limit)
+    segments_data = await client.get_transcribe_segments(limit)
     return [Segment(meeting_id=meeting_id, data=data) for meeting_id, data in segments_data.items()]
 
 
@@ -27,5 +27,5 @@ async def get_diarize_segments(limit: int = 100) -> List[Segment]:
     The number of chunks retrieved can be specified by the num_chunks parameter.
     """
     client = SegmentDAL(await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password))
-    segments_data = await client.get_transcribe_segments(limit)
+    segments_data = await client.get_diarize_segments(limit)
     return [Segment(meeting_id=meeting_id, data=data) for meeting_id, data in segments_data.items()]
