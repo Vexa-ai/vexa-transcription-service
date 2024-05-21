@@ -162,7 +162,7 @@ class ProcessorManager:
         await self.redis.sadd(self.todo_type_, task_id)
 
     async def pop_inprogress(self) -> Union[str, None]:
-        task_id = self.redis.spop(self.todo_type_)
+        task_id = await self.redis.spop(self.todo_type_)
         if task_id:
             await self.redis.sadd(self.in_progress_type_, task_id)
         return task_id
