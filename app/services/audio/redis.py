@@ -2,13 +2,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import (
-    Any,
-    List,
-    Literal,
-    Optional,
-    Union,
-)
+from typing import List, Literal, Optional, Union
 
 from dateutil import parser
 from dateutil.tz import UTC
@@ -168,7 +162,7 @@ class ProcessorManager:
         await self.redis.sadd(self.todo_type_, task_id)
 
     async def pop_inprogress(self) -> Union[str, None]:
-        task_id = await self.redis.spop(self.todo_type_)
+        task_id = self.redis.spop(self.todo_type_)
         if task_id:
             await self.redis.sadd(self.in_progress_type_, task_id)
         return task_id
