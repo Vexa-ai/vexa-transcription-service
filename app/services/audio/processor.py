@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime,timezone
+from datetime import datetime, timezone
 
 from redis.asyncio import Redis
 
@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 # import os
 # print("check_and_process_connections_interval_sec:", os.getenv('check_and_process_connections_interval_sec'))
-
 
 
 class Processor:
@@ -32,7 +31,7 @@ class Processor:
     async def _process_connection_task(self, connection_id, diarizer_step=60, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.writestream2file(connection_id)
-        
+
         current_time = datetime.now(timezone.utc)
 
         connection = Connection(redis_client, connection_id, user_id)
@@ -44,9 +43,10 @@ class Processor:
         await meeting.load_from_redis()
         await meeting.add_connection(connection.id)
         meeting.diarizer_last_updated_timestamp = meeting.diarizer_last_updated_timestamp or segment_start_timestamp
-        meeting.transcriber_last_updated_timestamp = meeting.transcriber_last_updated_timestamp or segment_start_timestamp
+        meeting.transcriber_last_updated_timestamp = (
+            meeting.transcriber_last_updated_timestamp or segment_start_timestamp
+        )
 
-        
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
             print("diarizer added")
             diarizer = Diarizer(redis_client)
@@ -61,7 +61,7 @@ class Processor:
             await transcriber.add_todo(meeting.meeting_id)
             await meeting.update_transcriber_timestamp(
                 segment_start_timestamp, transcriber_last_updated_timestamp=current_time
-                    )
+            )
 
     async def writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"
@@ -74,14 +74,18 @@ class Processor:
 
             for item in items["chunks"]:
                 chunk = bytes.fromhex(item["chunk"])
-                first_timestamp = datetime.fromisoformat(item["timestamp"].rstrip('Z')).astimezone(timezone.utc) if not first_timestamp else first_timestamp
+                first_timestamp = (
+                    datetime.fromisoformat(item["timestamp"].rstrip("Z")).astimezone(timezone.utc)
+                    if not first_timestamp
+                    else first_timestamp
+                )
 
                 # Open the file in append mode
                 with open(path, "ab") as file:
                     # Write data to the file
                     file.write(chunk)
 
-                last_timestamp = datetime.fromisoformat(item["timestamp"].rstrip('Z')).astimezone(timezone.utc)
+                last_timestamp = datetime.fromisoformat(item["timestamp"].rstrip("Z")).astimezone(timezone.utc)
 
                 meeting_id = item["meeting_id"]
                 user_id = item["user_id"]
