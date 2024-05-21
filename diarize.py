@@ -96,6 +96,7 @@ async def get_next_chunk_start(diarization_result, length, shift):
 async def process(redis_client, pipeline, max_length=240):
     diarizer = Diarizer(redis_client)
     meeting_id = await diarizer.pop_inprogress()
+    print(meeting_id)
 
     if not meeting_id:
         return

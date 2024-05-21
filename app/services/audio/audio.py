@@ -38,6 +38,7 @@ class AudioSlicer:
                 format,
                 "-acodec",
                 "libmp3lame",
+                "-rw_timeout", "5000000",  # Increase cache size timeout
                 "-",
             ]
             result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

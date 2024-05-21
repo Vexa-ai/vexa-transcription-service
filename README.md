@@ -28,3 +28,7 @@ switch to stream api instread of redis
 # docker compose -f /home/dima/0/1_audio/docker-compose.yml -p dev_dima_1 up -d;
 # docker compose -f /home/dima/0/2_engine/docker-compose.yml -p dev_dima_2 up -d;
 
+
+
+uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
