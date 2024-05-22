@@ -30,5 +30,5 @@ switch to stream api instread of redis
 
 
 
-uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8009 --reload
 

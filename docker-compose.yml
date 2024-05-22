@@ -18,8 +18,8 @@ services:
   diarize:
     depends_on:
       - qdrant
-    #command: tail -f /dev/null
-    command: ['python3','diarize.py']
+    command: tail -f /dev/null
+    #command: ['python3','diarize.py']
 
     # build:
     #   context: docker
@@ -36,8 +36,8 @@ services:
 
 
   transcribe:
-    command: ['python3','transcribe.py']
-    #command: tail -f /dev/null
+    #command: ['python3','transcribe.py']
+    command: tail -f /dev/null
 
     #build:
       # context: docker
@@ -84,8 +84,8 @@ services:
       STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
       STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
 
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
-    #command: tail -f /dev/null
+    #command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
+    command: tail -f /dev/null
     extra_hosts:
       - "host.docker.internal:host-gateway" # to connect to host ports
     volumes:
