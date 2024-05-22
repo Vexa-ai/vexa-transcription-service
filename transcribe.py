@@ -37,9 +37,11 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
     logger.info("done")
     result = [[w._asdict() for w in s.words] for s in segments]
     transcription = Transcript(meeting_id, redis_client, result)
+    if len(result)>0:
+        print(''.join([w['word'] for w in result[-1]]))
     await transcription.lpush()
 
-    meeting.transcribe_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
+    meeting.transcriber_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
     await transcriber.remove(meeting.meeting_id)
     await meeting.update_redis()
 
