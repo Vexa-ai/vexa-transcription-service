@@ -39,13 +39,12 @@ class Processor:
 
         meeting = Meeting(redis_client, meeting_id)
 
-        await meeting.update_redis()
         await meeting.load_from_redis()
         await meeting.add_connection(connection.id)
-        meeting.diarizer_last_updated_timestamp = meeting.diarizer_last_updated_timestamp or segment_start_timestamp
-        meeting.transcriber_last_updated_timestamp = (
-            meeting.transcriber_last_updated_timestamp or segment_start_timestamp
-        )
+        await meeting.set_start_timestamp(segment_start_timestamp)
+        
+        meeting.diarizer_last_updated_timestamp    = meeting.diarizer_last_updated_timestamp    or segment_start_timestamp
+        meeting.transcriber_last_updated_timestamp = meeting.transcriber_last_updated_timestamp or segment_start_timestamp
 
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
             print("diarizer added")
@@ -62,6 +61,8 @@ class Processor:
             await meeting.update_transcriber_timestamp(
                 segment_start_timestamp, transcriber_last_updated_timestamp=current_time
             )
+            
+        await meeting.update_redis()
 
     async def writestream2file(self, connection_id):
         path = f"/audio/{connection_id}.webm"

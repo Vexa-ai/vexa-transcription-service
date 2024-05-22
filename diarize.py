@@ -96,17 +96,17 @@ async def get_next_chunk_start(diarization_result, length, shift):
 async def process(redis_client, pipeline, max_length=240):
     diarizer = Diarizer(redis_client)
     meeting_id = await diarizer.pop_inprogress()
-    print(meeting_id)
-
     if not meeting_id:
         return
 
     meeting = Meeting(redis_client, meeting_id)
     await meeting.load_from_redis()
-    seek = (meeting.diarizer_seek_timestamp - meeting.start_timestamp).total_seconds()
+    print(meeting.meeting_id)
 
+    seek = (meeting.diarizer_seek_timestamp - meeting.start_timestamp).total_seconds()
+    print('diarizer_seek_timestamp',meeting.diarizer_seek_timestamp)
     current_time = datetime.now(timezone.utc)
-    
+
     connections = await meeting.get_connections()
 
     connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
@@ -115,26 +115,27 @@ async def process(redis_client, pipeline, max_length=240):
     audio_data = await audio_slicer.export_data()
 
     output, embeddings = pipeline(io.BytesIO(audio_data), return_embeddings=True)
+    print(len(embeddings))
 
     if len(embeddings) == 0:
         logger.info("No embeddings found, skipping...")
-        return
+        seek = seek + slice_duration
+        
+    else:
+        speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
 
-    speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
+        segments = [i for i in output.itertracks(yield_label=True)]
+        df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
+        df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
+        df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
+        result = df.drop(columns=["speaker_id"]).to_dict("records")
 
-    segments = [i for i in output.itertracks(yield_label=True)]
-    df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
-    df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
-    df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
-    result = df.drop(columns=["speaker_id"]).to_dict("records")
+        diarization = Diarisation(meeting_id, redis_client, result)
+        await diarization.lpush()
 
-    diarization = Diarisation(meeting_id, redis_client, result)
-    await diarization.lpush()
+        seek = await get_next_chunk_start(result, slice_duration, seek)
 
-    seek = await get_next_chunk_start(result, slice_duration, seek)
-    seek = seek or  seek + slice_duration
-
-    meeting.diarize_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
+    meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
     await diarizer.remove(meeting.meeting_id)
     await meeting.update_redis()
 
