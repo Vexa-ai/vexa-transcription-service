@@ -130,8 +130,9 @@ async def process(redis_client, pipeline, max_length=240):
         df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
         result = df.drop(columns=["speaker_id"]).to_dict("records")
 
-        diarization = Diarisation(meeting_id, redis_client, result)
+        diarization = Diarisation(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat()))
         await diarization.lpush()
+        print('pushed')
 
         seek = await get_next_chunk_start(result, slice_duration, seek)
 
