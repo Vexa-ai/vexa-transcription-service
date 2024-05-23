@@ -39,9 +39,10 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
             segments = [s for s in list(segments)]
             logger.info("done")
             result = [[w._asdict() for w in s.words] for s in segments]
+            result = segments
             transcription = Transcript(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id)) 
             if len(result)>0:
-                print(''.join([w['word'] for w in result[-1]]))
+             #   print(''.join([w['word'] for w in result[-1]]))
                 await transcription.lpush()
                 print('pushed')
 
