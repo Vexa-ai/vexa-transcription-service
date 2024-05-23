@@ -22,29 +22,36 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
         return
 
     meeting = Meeting(redis_client, meeting_id)
-    await meeting.load_from_redis()
-    seek = meeting.transcriber_seek_timestamp - meeting.start_timestamp
-    current_time = datetime.now(timezone.utc)
+    try:
+        await meeting.load_from_redis()
+        seek = meeting.transcriber_seek_timestamp - meeting.start_timestamp
+        current_time = datetime.now(timezone.utc)
 
-    connections = await meeting.get_connections()
-    connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
-    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
-    slice_duration = audio_slicer.audio.duration_seconds
-    audio_data = await audio_slicer.export_data()
+        connections = await meeting.get_connections()
+        connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
+        if connection:
+            print('connection.id',connection.id)
+            audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
+            slice_duration = audio_slicer.audio.duration_seconds
+            audio_data = await audio_slicer.export_data()
 
-    segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
-    segments = [s for s in list(segments)]
-    logger.info("done")
-    result = [[w._asdict() for w in s.words] for s in segments]
-    transcription = Transcript(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat())) 
-    if len(result)>0:
-        print(''.join([w['word'] for w in result[-1]]))
-        await transcription.lpush()
-        print('pushed')
+            segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
+            segments = [s for s in list(segments)]
+            logger.info("done")
+            result = [[w._asdict() for w in s.words] for s in segments]
+            transcription = Transcript(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id)) 
+            if len(result)>0:
+                print(''.join([w['word'] for w in result[-1]]))
+                await transcription.lpush()
+                print('pushed')
 
-    meeting.transcriber_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
-    await transcriber.remove(meeting.meeting_id)
-    await meeting.update_redis()
+            meeting.transcriber_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
+    except Exception as e:
+        print(e)
+    finally:
+        #TODO: need proper error handling
+        await transcriber.remove(meeting.meeting_id)
+        await meeting.update_redis()
 
 
 async def main():

@@ -100,45 +100,51 @@ async def process(redis_client, pipeline, max_length=240):
         return
 
     meeting = Meeting(redis_client, meeting_id)
-    await meeting.load_from_redis()
-    print(meeting.meeting_id)
+    try:
+        await meeting.load_from_redis()
+        print(meeting.meeting_id)
 
-    seek = (meeting.diarizer_seek_timestamp - meeting.start_timestamp).total_seconds()
-    print('diarizer_seek_timestamp',meeting.diarizer_seek_timestamp)
-    current_time = datetime.now(timezone.utc)
+        seek = (meeting.diarizer_seek_timestamp - meeting.start_timestamp).total_seconds()
+        print('diarizer_seek_timestamp',meeting.diarizer_seek_timestamp)
+        current_time = datetime.now(timezone.utc)
 
-    connections = await meeting.get_connections()
+        connections = await meeting.get_connections()
 
-    connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
-    audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
-    slice_duration = audio_slicer.audio.duration_seconds
-    audio_data = await audio_slicer.export_data()
+        connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
+        if connection:
+            print('connection.id',connection.id)
+            audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
+            slice_duration = audio_slicer.audio.duration_seconds
+            audio_data = await audio_slicer.export_data()
 
-    output, embeddings = pipeline(io.BytesIO(audio_data), return_embeddings=True)
-    print(len(embeddings))
+            output, embeddings = pipeline(io.BytesIO(audio_data), return_embeddings=True)
+            print(len(embeddings))
 
-    if len(embeddings) == 0:
-        logger.info("No embeddings found, skipping...")
-        seek = seek + slice_duration
-        
-    else:
-        speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
+            if len(embeddings) == 0:
+                logger.info("No embeddings found, skipping...")
+                seek = seek + slice_duration
+                
+            else:
+                speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
 
-        segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
-        df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
-        df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
-        result = df.drop(columns=["speaker_id"]).to_dict("records")
+                segments = [i for i in output.itertracks(yield_label=True)]
+                df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
+                df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
+                df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
+                result = df.drop(columns=["speaker_id"]).to_dict("records")
 
-        diarization = Diarisation(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat()))
-        await diarization.lpush()
-        print('pushed')
+                diarization = Diarisation(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id))
+                await diarization.lpush()
+                print('pushed')
 
-        seek = await get_next_chunk_start(result, slice_duration, seek)
+                seek = await get_next_chunk_start(result, slice_duration, seek)
 
-    meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
-    await diarizer.remove(meeting.meeting_id)
-    await meeting.update_redis()
+            meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
+    except Exception as e:
+        print(e)
+    finally:
+        await diarizer.remove(meeting.meeting_id)
+        await meeting.update_redis()
 
 
 async def main():
