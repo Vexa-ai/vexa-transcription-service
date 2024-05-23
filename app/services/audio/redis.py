@@ -133,7 +133,7 @@ class Meeting:
 
     def pop_connection(self):
         return self.redis.spop(self.connections_type_)
-    
+
     async def set_start_timestamp(self, segment_start_timestamp):
         await self.load_from_redis()
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp

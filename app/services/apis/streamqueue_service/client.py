@@ -1,6 +1,6 @@
 """This module contains methods for sending a request to StreamQueue-service."""
 import logging
-from typing import Any
+from typing import Any, List
 
 from httpx import (
     ConnectError,
@@ -17,6 +17,7 @@ from app.services.apis.streamqueue_service.exceptions import (
     StreamQueueServiceRequestError,
     StreamQueueServiceTimeoutError,
 )
+from app.services.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
 from app.services.health.schemas import Health
 from app.settings import settings
 
@@ -29,7 +30,7 @@ class StreamQueueServiceAPI(BaseAPI):
     def __init__(self):
         pass
 
-    async def get_connections(self) -> Any:
+    async def get_connections(self) -> List[ExistingConnectionInfo]:
         response_data = await self._process_request(
             method=HTTPMethod.GET,
             url=settings.stream_queue_service_list_connections,
@@ -37,37 +38,24 @@ class StreamQueueServiceAPI(BaseAPI):
             headers={"Content-Type": "application/json"},
             timeout=settings.stream_queue_service_request_timeout,
         )
-        return response_data["connections"]
+        return [ExistingConnectionInfo(**data) for data in response_data]
 
-    async def flush_stream_cache(self) -> Any:
-        return await self._process_request(
-            method=HTTPMethod.POST,
-            url=settings.stream_queue_service_flush_cache,
-            params={"service_token": settings.stream_queue_service_auth_token},
-            headers={"Content-Type": "application/json"},
-            timeout=settings.stream_queue_service_request_timeout,
-        )
-
-    async def fetch_chunks(self, connection_id: str, num_chunks: int) -> Any:
-        data = await self._process_request(
+    async def fetch_chunks(self, connection_id: str, limit: int) -> List[AudioChunkInfo]:
+        response_data = await self._process_request(
             method=HTTPMethod.GET,
             url=f"{settings.stream_queue_service_get_next_chunks}/{connection_id}",
-            params={
-                "service_token": settings.stream_queue_service_auth_token,
-                "limit": num_chunks,
-            },
+            params={"service_token": settings.stream_queue_service_auth_token, "limit": limit},
             timeout=settings.stream_queue_service_request_timeout,
         )
-        if data == {"message": "No more chunks available for this connection"}:
-            logger.warning(data)
-            return
-        else:
-            return data
-            #     else:
-            #         return {"error": "Failed to fetch chunks", "status_code": response.status_code,
-            #                 "details": response.text}
-            # except httpx.RequestError as e:
-            #     return {"error": "An error occurred while requesting chunks", "exception": str(e)}
+        if response_data:
+            return [AudioChunkInfo(**data) for data in response_data]
+
+        logger.warning("No more chunks available for this connection")
+        #     else:
+        #         return {"error": "Failed to fetch chunks", "status_code": response.status_code,
+        #                 "details": response.text}
+        # except httpx.RequestError as e:
+        #     return {"error": "An error occurred while requesting chunks", "exception": str(e)}
 
     async def health(self) -> bool:
         raw_data = await self._process_request(method=HTTPMethod.GET, url=settings.stream_queue_service_health)

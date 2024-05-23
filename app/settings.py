@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     check_and_process_connections_interval_sec: float = Field(10.0, env="CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC")
 
     stream_queue_service_list_connections: str
-    stream_queue_service_flush_cache: str
     stream_queue_service_get_next_chunks: str
     stream_queue_service_health: str
     stream_queue_service_health_check: str

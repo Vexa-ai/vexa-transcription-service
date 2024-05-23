@@ -25,4 +25,4 @@ async def check_and_process_connections():
         await service.start()
 
     else:
-        logger.warning(f"Connection processing disabled")
+        logger.warning("Connection processing disabled")
