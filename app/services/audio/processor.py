@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 from app.database_redis.connection import get_redis_client
 from app.database_redis.dals.connection_dal import ConnectionDAL
 from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
-from app.services.apis.streamqueue_service.schemas import AudioChunkInfo
+from app.services.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
 from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
 
@@ -21,11 +21,11 @@ class Processor:
 
     async def process_connections(self):
         logger.info("Process connections...")
-        connections = await self.stream_queue_service_api.get_connections()
-        connection_ids = [c.connection_id for c in connections]
+        connections: List[ExistingConnectionInfo] = await self.stream_queue_service_api.get_connections()
 
-        for connection_id in connection_ids:
-            await self._process_connection_task(connection_id)
+        for connection in connections:
+            logger.info(f'Found {connection.amount} chink(s)')
+            await self._process_connection_task(connection.connection_id)
 
     async def _process_connection_task(self, connection_id, diarizer_step=10, transcriber_step=5):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
