@@ -11,8 +11,26 @@ from app.services.audio.audio import AudioSlicer
 from app.services.audio.redis import Meeting, Transcriber, best_covering_connection
 from app.settings import settings
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
 
+
+def get_next_seek(result,seek):
+
+    df = pd.DataFrame(result)[[2,3,4]]
+    df.columns = ['start','end','speech']
+    df['start'] = pd.to_timedelta(df['start'],unit='s') + pd.Timestamp(seek)
+    df['end'] = pd.to_timedelta(df['end'],unit='s') + pd.Timestamp(seek)
+
+    if len(result) > 0:
+        return df.iloc[-1]['start']
+
+    else:
+        return None
+
+        
+        
 
 async def process(redis_client, model, max_length=240,overlap = 2) -> None:
     transcriber = Transcriber(redis_client)
@@ -46,7 +64,7 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
                 await transcription.lpush()
                 print('pushed')
 
-            meeting.transcriber_seek_timestamp = meeting.start_timestamp+seek +timedelta(seconds = slice_duration-overlap)
+            meeting.transcriber_seek_timestamp = get_next_seek(result,meeting.diarizer_seek_timestamp)
     except Exception as e:
         print(e)
     finally:
