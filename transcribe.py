@@ -11,6 +11,8 @@ from app.services.audio.audio import AudioSlicer
 from app.services.audio.redis import Meeting, Transcriber, best_covering_connection
 from app.settings import settings
 
+import json
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def get_next_seek(result,seek):
 
-    df = pd.DataFrame(result)[[2,3,4]]
+    df = pd.DataFrame(json.loads(json.dumps(result)))[[2,3,4]]
     df.columns = ['start','end','speech']
     df['start'] = pd.to_timedelta(df['start'],unit='s') + pd.Timestamp(seek)
     df['end'] = pd.to_timedelta(df['end'],unit='s') + pd.Timestamp(seek)
@@ -32,7 +34,7 @@ def get_next_seek(result,seek):
         
         
 
-async def process(redis_client, model, max_length=240,overlap = 2) -> None:
+async def process(redis_client, model, max_length=600,overlap = 2) -> None:
     transcriber = Transcriber(redis_client)
     meeting_id = await transcriber.pop_inprogress()
 
@@ -41,13 +43,15 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
 
     meeting = Meeting(redis_client, meeting_id)
     try:
+        print(meeting_id)
         await meeting.load_from_redis()
-        seek = meeting.transcriber_seek_timestamp - meeting.start_timestamp
         current_time = datetime.now(timezone.utc)
 
         connections = await meeting.get_connections()
         connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
         if connection:
+            seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
+            gap =  (meeting.start_timestamp - connection.start_timestamp).total_seconds()
             print('connection.id',connection.id)
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
@@ -56,15 +60,19 @@ async def process(redis_client, model, max_length=240,overlap = 2) -> None:
             segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
             segments = [s for s in list(segments)]
             logger.info("done")
-            result = [[w._asdict() for w in s.words] for s in segments]
-            result = segments
+            result = list(segments)
+            print(result)
             transcription = Transcript(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id)) 
             if len(result)>0:
-             #   print(''.join([w['word'] for w in result[-1]]))
                 await transcription.lpush()
                 print('pushed')
 
-            meeting.transcriber_seek_timestamp = get_next_seek(result,meeting.diarizer_seek_timestamp)
+            meeting.transcriber_seek_timestamp =  (meeting.transcriber_seek_timestamp
+                                                   +pd.Timedelta(seconds = slice_duration)
+                                                   +pd.Timedelta(seconds = gap)
+                                                   -pd.Timedelta(seconds = overlap))
+                
+            print('meeting.transcriber_seek_timestamp',meeting.transcriber_seek_timestamp)
     except Exception as e:
         print(e)
     finally:

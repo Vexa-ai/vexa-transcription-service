@@ -2,8 +2,14 @@ from qdrant_client import QdrantClient, models
 from uuid import UUID
 from qdrant_client.http.models import PointStruct
 import asyncio
-from audio.redis import get_inner_redis
+
 from qdrant_client.http.models import PointStruct
+
+from app.database_redis.connection import get_redis_client
+from app.settings import settings
+
+
+
 
 client = QdrantClient("qdrant")
 
@@ -30,27 +36,27 @@ print('recreated')
 
 
 
-async def main():
-    redis_client = await get_inner_redis()
-    embs = await redis_client.get('embs_recovery')
-    embs = eval(embs)
+# async def main():
+#     redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
+#     embs = await redis_client.get('embs_recovery')
+#     embs = eval(embs)
 
-    points = [models.PointStruct(id=item['id'], 
-                             vector=item['embedding'],
-                             payload={'speaker_id': item['speaker_id'], 'client_id': item['client_id']})
-          for item in embs]
+#     points = [models.PointStruct(id=item['id'], 
+#                              vector=item['embedding'],
+#                              payload={'speaker_id': item['speaker_id'], 'client_id': item['client_id']})
+#           for item in embs]
 
 
 
-    operation_info = client.upsert(
-        collection_name="main",
-        wait=True,
-        points=points,
-    )
+#     operation_info = client.upsert(
+#         collection_name="main",
+#         wait=True,
+#         points=points,
+#     )
 
-    print(operation_info)
-    print(client.get_collection('main').vectors_count)
+#     print(operation_info)
+#     print(client.get_collection('main').vectors_count)
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(main())
-loop.close()
+# loop = asyncio.get_event_loop()
+# loop.run_until_complete(main())
+# loop.close()

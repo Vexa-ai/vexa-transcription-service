@@ -109,24 +109,26 @@ docker compose build
 ```
 
 Run:
-- (prod)
+
+#TODO: fix paths @ANdrew
+<!-- - (prod)
   ```bash
-  docker compose -f /home/dima/1_feature/0_stream/docker-compose.yml -p prod_1 up -d
+  docker compose -f /home/dima/1_feature/1_audio/docker-compose.yml -p prod_1 up -d
   ```
 
 -  (stage)
   ```bash
-  docker compose -f /home/dima/1_feature/0_stream/docker-compose.yml -p stage_1 up -d
+  docker compose -f /home/dima/1_feature/1_audio/docker-compose.yml -p stage_1 up -d
   ```
 
 -  (dev-andrew)
   ```bash
-  docker compose -f /home/dima/1_feature/0_stream/docker-compose.yml -p dev_andrew_1 up -d
-  ```
+  docker compose -f /home/andrew/1_feature/1_audio/docker-compose.yml -p dev_andrew_1 up -d
+  ``` -->
 
 -  (dev-dima)
   ```bash
-  docker compose -f /home/dima/1_feature/0_stream/docker-compose.yml -p dev_dima_1 up -d
+  docker compose -f /home/dima/0/1_audio/docker-compose.yml -p dev_dima_1 up -d
   ```
 
 ## FastAPI
