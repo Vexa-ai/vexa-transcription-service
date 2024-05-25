@@ -155,6 +155,11 @@ class Meeting:
             transcriber_last_updated_timestamp if transcriber_last_updated_timestamp else None
         )
         await self.update_redis()
+        
+    async def delete_meeting_data(self):
+        await self.redis.delete(self.metadata_type_)
+        await self.redis.delete(self.connections_type_)
+
 
 
 class ProcessorManager:

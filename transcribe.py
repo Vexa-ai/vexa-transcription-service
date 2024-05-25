@@ -34,7 +34,7 @@ def get_next_seek(result,seek):
         
         
 
-async def process(redis_client, model, max_length=600,overlap = 2) -> None:
+async def process(redis_client, model, max_length=600,overlap = 0) -> None:
     transcriber = Transcriber(redis_client)
     meeting_id = await transcriber.pop_inprogress()
 
@@ -48,21 +48,21 @@ async def process(redis_client, model, max_length=600,overlap = 2) -> None:
         current_time = datetime.now(timezone.utc)
 
         connections = await meeting.get_connections()
-        connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
+        connection = best_covering_connection(meeting.transcriber_seek_timestamp, current_time, connections)
         if connection:
-            seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
+            seek = (meeting.transcriber_seek_timestamp - connection.start_timestamp).total_seconds()
             gap =  (meeting.start_timestamp - connection.start_timestamp).total_seconds()
             print('connection.id',connection.id)
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
             audio_data = await audio_slicer.export_data()
 
-            segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True)
+            segments, _ = model.transcribe(io.BytesIO(audio_data), beam_size=5, vad_filter=True, word_timestamps=True,vad_parameters={'threshold':0.9}) #
             segments = [s for s in list(segments)]
             logger.info("done")
             result = list(segments)
             print(result)
-            transcription = Transcript(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id)) 
+            transcription = Transcript(meeting_id, redis_client, (result,meeting.transcriber_seek_timestamp.isoformat(),connection.id)) 
             if len(result)>0:
                 await transcription.lpush()
                 print('pushed')

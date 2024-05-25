@@ -60,7 +60,7 @@ async def process_speaker_emb(emb: list, redis_client, user_id):
     if speaker_id:
         if score > 0.95:
             pass
-        elif score > 0.75:
+        elif score > 0.70:
             await add_new_speaker_emb(emb, redis_client, user_id, speaker_id=speaker_id)
         else:
             speaker_id = await add_new_speaker_emb(emb, redis_client, user_id)
@@ -114,6 +114,7 @@ async def process(redis_client, pipeline, max_length=240):
         if connection:
             seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
             gap =  (meeting.start_timestamp - connection.start_timestamp).total_seconds()
+            print('gap',gap)
             print('connection.id',connection.id)
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
@@ -141,7 +142,14 @@ async def process(redis_client, pipeline, max_length=240):
 
                 seek = await get_next_chunk_start(result, slice_duration, seek)
 
-            meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
+         #   meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
+            overlap=0
+            meeting.diarizer_seek_timestamp =  (meeting.diarizer_seek_timestamp
+                                                   +pd.Timedelta(seconds = slice_duration)
+                                                   +pd.Timedelta(seconds = gap)
+                                                   -pd.Timedelta(seconds = overlap))
+            
+            
     except Exception as e:
         print(e)
     finally:
