@@ -73,7 +73,6 @@ def parse_segment(segment):
 
 
 async def get_next_chunk_start(diarization_result, length, shift):
-
     if len(diarization_result) > 0:
         last_speech = diarization_result[-1]
 
@@ -132,6 +131,7 @@ async def process(redis_client, pipeline, max_length=240):
                 seek = seek + slice_duration
 
             else:
+                logger.info(f"{len(embeddings)} embeddings found")
                 speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
 
                 segments = [i for i in output.itertracks(yield_label=True)]
@@ -158,7 +158,7 @@ async def process(redis_client, pipeline, max_length=240):
             )
 
     except Exception as ex:
-        logger.info(ex)
+        logger.error(ex)
 
     finally:
         await diarizer.remove(meeting.meeting_id)
