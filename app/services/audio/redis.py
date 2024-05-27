@@ -201,6 +201,7 @@ def get_timestamps_overlap(start1, end1, start2, end2):
 
 
 def best_covering_connection(target_start, target_end, connections):
+    #TODO: change if to choose between connections that are 1 minimimize gap between target start and connection start 2 maximum overlap
     best_connection = None
     max_overlap = 0
 
