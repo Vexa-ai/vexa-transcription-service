@@ -2,7 +2,7 @@ import asyncio
 import io
 import json
 import logging
-from datetime import datetime, timezone,timedelta
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
 import pandas as pd
@@ -16,7 +16,7 @@ from app.services.audio.audio import AudioSlicer
 from app.services.audio.redis import Diarisation, Diarizer, Meeting, best_covering_connection
 from app.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("diarize")
 
 # client = QdrantClient("host.docker.internal", timeout=10, port=6333)
 client = QdrantClient("qdrant", timeout=10)
@@ -27,9 +27,7 @@ def get_stored_knn(emb: list, user_id):
         collection_name="main",
         query_vector=emb,
         limit=1,
-        query_filter=models.Filter(
-            must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]
-        ),
+        query_filter=models.Filter(must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]),
     )
     if len(search_result) > 0:
         search_result = search_result[0]
@@ -94,42 +92,45 @@ async def get_next_chunk_start(diarization_result, length, shift):
 
 
 async def process(redis_client, pipeline, max_length=240):
+    logger.info("process...")
     diarizer = Diarizer(redis_client)
     meeting_id = await diarizer.pop_inprogress()
+
     if not meeting_id:
         return
 
     meeting = Meeting(redis_client, meeting_id)
+    logger.info(f"Meeting ID: {meeting.meeting_id}")
+    logger.info(f"diarizer_seek_timestamp: {meeting.diarizer_seek_timestamp}")
+
     try:
         await meeting.load_from_redis()
-        print(meeting.meeting_id)
-
-        
-        print('diarizer_seek_timestamp',meeting.diarizer_seek_timestamp)
         current_time = datetime.now(timezone.utc)
 
         connections = await meeting.get_connections()
-
         connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
         if connection:
             seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
-            print(f'seek: {seek}')
+            logger.info(f"seek: {seek}")
+
             if seek < 0:
+                logger.warning("seek < 0")
                 seek = 0
-            gap =  (meeting.start_timestamp - connection.start_timestamp).total_seconds()
-            print('gap',gap)
-            print('connection.id',connection.id)
+
+            gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
+            logger.info(f"gap: {gap}")
+            logger.info(f"Connection ID: {connection.id}")
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
             audio_data = await audio_slicer.export_data()
 
             output, embeddings = pipeline(io.BytesIO(audio_data), return_embeddings=True)
-            print(len(embeddings))
+            logger.info(len(embeddings))
 
             if len(embeddings) == 0:
                 logger.info("No embeddings found, skipping...")
                 seek = seek + slice_duration
-                
+
             else:
                 speakers = [await process_speaker_emb(e, redis_client, connection.user_id) for e in embeddings]
 
@@ -139,28 +140,33 @@ async def process(redis_client, pipeline, max_length=240):
                 df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
                 result = df.drop(columns=["speaker_id"]).to_dict("records")
 
-                diarization = Diarisation(meeting_id, redis_client, (result,meeting.diarizer_seek_timestamp.isoformat(),connection.id))
+                diarization = Diarisation(
+                    meeting_id, redis_client, (result, meeting.diarizer_seek_timestamp.isoformat(), connection.id)
+                )
                 await diarization.lpush()
-                print('pushed')
+                logger.info("pushed")
 
                 seek = await get_next_chunk_start(result, slice_duration, seek)
 
-         #   meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
-            overlap=0
-            meeting.diarizer_seek_timestamp =  (meeting.diarizer_seek_timestamp
-                                                   +pd.Timedelta(seconds = slice_duration)
-                                                   +pd.Timedelta(seconds = gap)
-                                                   -pd.Timedelta(seconds = overlap))
-            
-            
-    except Exception as e:
-        print(e)
+            #   meeting.diarizer_seek_timestamp = meeting.start_timestamp+timedelta(seconds=seek)
+            overlap = 0
+            meeting.diarizer_seek_timestamp = (
+                meeting.diarizer_seek_timestamp
+                + pd.Timedelta(seconds=slice_duration)
+                + pd.Timedelta(seconds=gap)
+                - pd.Timedelta(seconds=overlap)
+            )
+
+    except Exception as ex:
+        logger.info(ex)
+
     finally:
         await diarizer.remove(meeting.meeting_id)
         await meeting.update_redis()
 
 
 async def main():
+    logger.info("Running diarize loop...")
     redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
     while True:
@@ -169,6 +175,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    logger.info("Initialize Pipeline...")
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
         use_auth_token="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",

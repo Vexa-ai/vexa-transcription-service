@@ -66,7 +66,10 @@ class BaseDAL:
         for key in unique_keys:
             for _ in range(limit):
                 value = await self._redis_client.rpop(key)
-                matching_queues[key].append(value)
+                if value:
+                    matching_queues[key].append(value)
+                else:
+                    break  # Exit if the list becomes empty before reaching num_items
 
         return matching_queues
 
