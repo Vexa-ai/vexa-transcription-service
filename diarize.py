@@ -109,6 +109,8 @@ async def process(redis_client, pipeline, max_length=240):
         connections = await meeting.get_connections()
         connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
         if connection:
+            logger.info(f"Connection ID: {connection.id}")
+
             seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"seek: {seek}")
 
@@ -118,7 +120,6 @@ async def process(redis_client, pipeline, max_length=240):
 
             gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"gap: {gap}")
-            logger.info(f"Connection ID: {connection.id}")
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
             audio_data = await audio_slicer.export_data()

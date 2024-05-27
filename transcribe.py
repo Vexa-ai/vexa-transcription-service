@@ -40,6 +40,7 @@ async def process(redis_client, model, max_length=600, overlap=0) -> None:
 
     meeting = Meeting(redis_client, meeting_id)
     logger.info(f"Meeting ID: {meeting.meeting_id}")
+    logger.info(f"transcriber_seek_timestamp: {meeting.transcriber_seek_timestamp}")
 
     try:
         await meeting.load_from_redis()
@@ -48,9 +49,12 @@ async def process(redis_client, model, max_length=600, overlap=0) -> None:
         connections = await meeting.get_connections()
         connection = best_covering_connection(meeting.transcriber_seek_timestamp, current_time, connections)
         if connection:
-            seek = (meeting.transcriber_seek_timestamp - connection.start_timestamp).total_seconds()
-            gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"Connection ID: {connection.id}")
+
+            seek = (meeting.transcriber_seek_timestamp - connection.start_timestamp).total_seconds()
+            logger.info(f"seek: {seek}")
+            gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
+            logger.info(f"gap: {gap}")
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
             audio_data = await audio_slicer.export_data()
