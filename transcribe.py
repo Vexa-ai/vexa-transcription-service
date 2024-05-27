@@ -32,7 +32,6 @@ def get_next_seek(result, seek):
 
 
 async def process(redis_client, model, max_length=600, overlap=0) -> None:
-    logger.info("process...")
     transcriber = Transcriber(redis_client)
     meeting_id = await transcriber.pop_inprogress()
 
