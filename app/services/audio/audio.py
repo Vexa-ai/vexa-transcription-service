@@ -28,8 +28,8 @@ class AudioSlicer:
         def slice_and_get_data(path, start, duration):
             command = [
                 "ffmpeg",
-                "-seekable",
-                "0",  # Add the -seekable 0 option
+                # "-seekable",
+                # "0",  # Add the -seekable 0 option
                 "-ss",
                 str(start),
                 "-t",
