@@ -113,7 +113,7 @@ async def process(redis_client, pipeline, max_length=240):
         connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
         if connection:
             seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
-            logger.warning(f'seek: {seek}')
+            print(f'seek: {seek}')
             if seek < 0:
                 seek = 0
             gap =  (meeting.start_timestamp - connection.start_timestamp).total_seconds()
