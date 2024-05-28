@@ -74,7 +74,7 @@ class AudioSlicer:
             end_millis = end * 1000
             audio = self.audio[start_millis:end_millis]
         else:
-            logger.info(start)
+            logger.info(f'start: {start}')
             audio = self.audio
 
         return audio

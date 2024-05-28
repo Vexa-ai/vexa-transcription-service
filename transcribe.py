@@ -1,19 +1,16 @@
 import asyncio
 import io
+import json
 import logging
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timezone
 
+import pandas as pd
 from faster_whisper import WhisperModel
-from app.services.audio.redis import Transcript
 
 from app.database_redis.connection import get_redis_client
 from app.services.audio.audio import AudioSlicer
-from app.services.audio.redis import Meeting, Transcriber, best_covering_connection
+from app.services.audio.redis import Meeting, Transcriber, Transcript, best_covering_connection
 from app.settings import settings
-
-import json
-
-import pandas as pd
 
 logger = logging.getLogger("transcribe")
 
@@ -53,6 +50,11 @@ async def process(redis_client, model, max_length=600, overlap=0) -> None:
 
             seek = (meeting.transcriber_seek_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"seek: {seek}")
+
+            if seek < 0:
+                logger.warning("seek < 0")
+                seek = 0
+
             gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"gap: {gap}")
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
