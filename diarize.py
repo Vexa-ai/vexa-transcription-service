@@ -13,7 +13,7 @@ from qdrant_client import QdrantClient, models
 from app.database_redis import keys
 from app.database_redis.connection import get_redis_client
 from app.services.audio.audio import AudioSlicer
-from app.services.audio.redis import Diarisation, Diarizer, Meeting, best_covering_connection
+from app.services.audio.redis import Diarisation, Diarizer, Meeting, best_covering_connection,connection_with_minimal_start_greater_than_target
 from app.settings import settings
 
 logger = logging.getLogger("diarize")
@@ -99,26 +99,27 @@ async def process(redis_client, pipeline, max_length=240):
 
     meeting = Meeting(redis_client, meeting_id)
     logger.info(f"Meeting ID: {meeting.meeting_id}")
-    logger.info(f"diarizer_seek_timestamp: {meeting.diarizer_seek_timestamp}")
+    
 
     try:
         await meeting.load_from_redis()
+        logger.info(f"diarizer_seek_timestamp: {meeting.diarizer_seek_timestamp}")
         current_time = datetime.now(timezone.utc)
 
         connections = await meeting.get_connections()
         connection = best_covering_connection(meeting.diarizer_seek_timestamp, current_time, connections)
         if connection:
             logger.info(f"Connection ID: {connection.id}")
+            
+            
+            if meeting.diarizer_seek_timestamp < connection.start_timestamp:
+                meeting.diarizer_seek_timestamp = connection.start_timestamp
+                
+        
+                
 
             seek = (meeting.diarizer_seek_timestamp - connection.start_timestamp).total_seconds()
             logger.info(f"seek: {seek}")
-
-            if seek < 0:
-                logger.warning("seek < 0")
-                seek = 0
-
-            gap = (meeting.start_timestamp - connection.start_timestamp).total_seconds()
-            logger.info(f"gap: {gap}")
             audio_slicer = await AudioSlicer.from_ffmpeg_slice(f"/audio/{connection.id}.webm", seek, max_length)
             slice_duration = audio_slicer.audio.duration_seconds
             audio_data = await audio_slicer.export_data()
@@ -153,9 +154,14 @@ async def process(redis_client, pipeline, max_length=240):
             meeting.diarizer_seek_timestamp = (
                 meeting.diarizer_seek_timestamp
                 + pd.Timedelta(seconds=slice_duration)
-                + pd.Timedelta(seconds=gap)
                 - pd.Timedelta(seconds=overlap)
             )
+            
+        else:
+           # meeting.diarizer_seek_timestamp = current_time
+            meeting.diarizer_seek_timestamp = connection_with_minimal_start_greater_than_target(meeting.diarizer_seek_timestamp, connections).start_timestamp
+            
+        logger.info(f"diarizer_seek_timestamp: {meeting.diarizer_seek_timestamp}")
 
     except Exception as ex:
         logger.error(ex)

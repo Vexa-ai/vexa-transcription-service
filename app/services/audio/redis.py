@@ -200,15 +200,58 @@ def get_timestamps_overlap(start1, end1, start2, end2):
     return max(0, delta)
 
 
+
+# def best_covering_connection(target_start, target_end, connections):
+#     #TODO: change if to choose between connections that are 1 minimimize gap between target start and connection start 2 maximum overlap
+#     best_connection = None
+#     max_overlap = 0
+
+#     for connection in connections:
+#         overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
+#         if overlap > max_overlap:
+#             max_overlap = overlap
+#             best_connection = connection
+
+#     return best_connection
+
+
+
 def best_covering_connection(target_start, target_end, connections):
-    #TODO: change if to choose between connections that are 1 minimimize gap between target start and connection start 2 maximum overlap
     best_connection = None
     max_overlap = 0
+    min_start_diff = float('inf')
+    potential_connections = []
 
+    # Find connections with the minimal start time difference
     for connection in connections:
+        start_diff = abs((connection.start_timestamp - target_start).total_seconds())
+        if start_diff < min_start_diff:
+            min_start_diff = start_diff
+            potential_connections = [connection]
+        elif start_diff == min_start_diff:
+            potential_connections.append(connection)
+    
+    # Among the potential connections, find the one with the maximum overlap
+    for connection in potential_connections:
         overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
         if overlap > max_overlap:
             max_overlap = overlap
             best_connection = connection
 
     return best_connection
+
+
+def connection_with_minimal_start_greater_than_target(target_start, connections):
+    best_connection = None
+    min_start_timestamp = None
+
+    for connection in connections:
+        if connection.start_timestamp > target_start:
+            if min_start_timestamp is None or connection.start_timestamp < min_start_timestamp:
+                min_start_timestamp = connection.start_timestamp
+                best_connection = connection
+
+    return best_connection
+
+
+
