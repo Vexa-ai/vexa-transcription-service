@@ -6,6 +6,11 @@ import subprocess
 
 from pydub import AudioSegment
 
+
+class AudioFileCorruptedError(Exception):
+    def __init__(self, message="AudioFile is corrupted"):
+        super().__init__(message)
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +53,18 @@ class AudioSlicer:
             return result.stdout
 
         data = await asyncio.to_thread(slice_and_get_data, path, start, duration)
-        return cls(data, format)
+        
+        try:
+            return cls(data, format)
+            
+        except Exception as e:
+            with open(path,'rb') as f:
+                starting_bytes = f.read()
+                if starting_bytes[:10] != b'\x1aE\xdf\xa3\x9fB\x86\x81\x01B':
+                    logger.error(f'header is corrupted for audio file: {path}')
+                    raise AudioFileCorruptedError(f'Audio File header {path} is corrupted') from e
+            raise e
+
 
     async def export2file(self, export_path, start=None, end=None):
         def export(segment, export_path):
