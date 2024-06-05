@@ -19,8 +19,8 @@ services:
     depends_on:
       - qdrant
       - redis
-    #command: tail -f /dev/null
-    command: ['python3','diarize.py']
+    command: tail -f /dev/null
+    #command: ['python3','diarize.py']
 
     # build:
     #   context: docker
@@ -39,8 +39,8 @@ services:
   transcribe:
     depends_on:
       - redis
-    command: ['python3','transcribe.py']
-    #command: tail -f /dev/null
+    #command: ['python3','transcribe.py']
+    command: tail -f /dev/null
 
     #build:
       # context: docker
