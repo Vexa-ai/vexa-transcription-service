@@ -37,6 +37,7 @@ class SpeakerEmbs:
             return None, None
 
     async def add_new_speaker_emb(self, emb: list, redis_client, user_id, speaker_id=None):
+        from qdrant_client import QdrantClient, models
         self.logger.info("Adding new speaker...")
         speaker_id = speaker_id if speaker_id else str(uuid4())
         self.client.upsert(
