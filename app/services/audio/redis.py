@@ -68,11 +68,11 @@ class Connection:
         data = await self.redis.hgetall(self.type_)
         if data:
             self.start_timestamp = parser.parse(data.get("start_timestamp")).astimezone(UTC)
-            self.end_timestamp = parser.parse(data.get("end_timestamp")).astimezone(UTC)
+            self.end_timestamp   = parser.parse(data.get("end_timestamp")).astimezone(UTC)
             self.user_id = data.get("user_id")
 
-    def delete_connection_data(self):
-        self.redis.delete(self.type_)
+    async  def delete_connection_data(self):
+        await self.redis.delete(self.type_)
 
     async def update_timestamps(self, segment_start_timestamp, end_timestamp):
         await self.load_from_redis()
@@ -124,6 +124,10 @@ class Meeting:
 
     async def add_connection(self, connection_id):
         await self.redis.sadd(self.connections_type_, connection_id)
+        
+    async def delete_connection(self, connection_id):
+        await self.redis.srem(self.connections_type_, connection_id)
+
 
     async def get_connections(self):
         connection_ids = await self.redis.smembers(self.connections_type_)
@@ -220,22 +224,23 @@ def best_covering_connection(target_start, target_end, connections):
     best_connection = None
     max_overlap = 0
     min_start_diff = float('inf')
-    potential_connections = []
+    overlapped_connections = []
 
-    # Find connections with the minimal start time difference
+    # Find all connections that overlap with the target interval
     for connection in connections:
-        start_diff = abs((connection.start_timestamp - target_start).total_seconds())
+        overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
+        if overlap > 0:
+            overlapped_connections.append(connection)
+    
+    # If there are no overlapping connections, return None
+    if not overlapped_connections:
+        return None
+
+    # Among the overlapping connections, find the one closest to the target start time
+    for connection in overlapped_connections:
+        start_diff = abs((target_start - connection.start_timestamp).total_seconds())
         if start_diff < min_start_diff:
             min_start_diff = start_diff
-            potential_connections = [connection]
-        elif start_diff == min_start_diff:
-            potential_connections.append(connection)
-    
-    # Among the potential connections, find the one with the maximum overlap
-    for connection in potential_connections:
-        overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
-        if overlap > max_overlap:
-            max_overlap = overlap
             best_connection = connection
 
     return best_connection
