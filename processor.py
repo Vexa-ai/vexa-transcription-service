@@ -133,6 +133,13 @@ class Processor:
                 self.logger.error(f'Audio file at {path} is corrupted')
                 await self.meeting.delete_connection(self.connection.id)
                 return
+            
+            except Exception:
+                self.logger.error(f'could nod read file {path} at seek {seek} with length {max_length}')
+                await self.meeting.delete_connection(self.connection.id)
+                return
+            
+            
 
             self.slice_duration = audio_slicer.audio.duration_seconds
             self.audio_data = await audio_slicer.export_data()
