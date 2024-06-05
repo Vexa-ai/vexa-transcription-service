@@ -23,6 +23,7 @@ class SpeakerEmbs:
     logger: Any = field(default=logging.getLogger(__name__))
 
     def get_stored_knn(self, emb: list, user_id):
+        from qdrant_client import QdrantClient, models
         search_result = self.client.search(
             collection_name="main",
             query_vector=emb,
