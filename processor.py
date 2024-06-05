@@ -144,6 +144,9 @@ class Processor:
 
             try:
                 audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, max_length)
+                self.slice_duration = audio_slicer.audio.duration_seconds
+                self.audio_data = await audio_slicer.export_data()
+                return True
 
             except AudioFileCorruptedError:
                 self.logger.error(f"Audio file at {path} is corrupted")
@@ -154,10 +157,6 @@ class Processor:
                 self.logger.error(f"could nod read file {path} at seek {seek} with length {max_length}")
                 await self.meeting.delete_connection(self.connection.id)
                 return
-
-            self.slice_duration = audio_slicer.audio.duration_seconds
-            self.audio_data = await audio_slicer.export_data()
-            return True
 
     async def diarize(self, pipeline, qdrant_client):
         client = SpeakerEmbs(qdrant_client)
