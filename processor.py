@@ -2,20 +2,28 @@ import asyncio
 import io
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Any, Union
 from uuid import uuid4
 
 import pandas as pd
+from redis.asyncio.client import Redis
 
 from app.database_redis import keys
 from app.database_redis.connection import get_redis_client
-from app.services.audio.audio import AudioSlicer, AudioFileCorruptedError
-from app.services.audio.redis import Diarisation, Diarizer, Transcriber, Transcript, Meeting, best_covering_connection, connection_with_minimal_start_greater_than_target
+from app.services.audio.audio import AudioFileCorruptedError, AudioSlicer
+from app.services.audio.redis import (
+    Diarisation,
+    Diarizer,
+    Meeting,
+    Transcriber,
+    Transcript,
+    best_covering_connection,
+    connection_with_minimal_start_greater_than_target,
+)
 from app.settings import settings
-from dataclasses import dataclass, field
-from typing import Union
-from redis.asyncio.client import Redis
-from typing import Any
+
 
 @dataclass
 class SpeakerEmbs:
@@ -24,11 +32,14 @@ class SpeakerEmbs:
 
     def get_stored_knn(self, emb: list, user_id):
         from qdrant_client import QdrantClient, models
+
         search_result = self.client.search(
             collection_name="main",
             query_vector=emb,
             limit=1,
-            query_filter=models.Filter(must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]),
+            query_filter=models.Filter(
+                must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]
+            ),
         )
         if len(search_result) > 0:
             search_result = search_result[0]
@@ -38,6 +49,7 @@ class SpeakerEmbs:
 
     async def add_new_speaker_emb(self, emb: list, redis_client, user_id, speaker_id=None):
         from qdrant_client import QdrantClient, models
+
         self.logger.info("Adding new speaker...")
         speaker_id = speaker_id if speaker_id else str(uuid4())
         self.client.upsert(
@@ -67,8 +79,10 @@ class SpeakerEmbs:
 
         return str(speaker_id), score
 
+
 def parse_segment(segment):
     return segment[0].start, segment[0].end, int(segment[-1].split("_")[1])
+
 
 async def get_next_chunk_start(diarization_result, length, shift):
     if len(diarization_result) > 0:
@@ -81,16 +95,17 @@ async def get_next_chunk_start(diarization_result, length, shift):
     else:
         return None
 
+
 @dataclass
 class Processor:
-    processor_type: Union['transcriber', 'diarizer']
+    processor_type: Union["transcriber", "diarizer"]
     redis_client: Redis
     logger: Any = field(default=logging.getLogger(__name__))
 
     def __post_init__(self):
-        if self.processor_type == 'transcriber':
+        if self.processor_type == "transcriber":
             self.processor = Transcriber(self.redis_client)
-        if self.processor_type == 'diarizer':
+        if self.processor_type == "diarizer":
             self.processor = Diarizer(self.redis_client)
 
     async def read(self, max_length=240):
@@ -104,19 +119,19 @@ class Processor:
         self.logger.info(f"Meeting ID: {meeting_id}")
 
         await self.meeting.load_from_redis()
-        
+
         if isinstance(self.processor, Diarizer):
             self.seek_timestamp = self.meeting.diarizer_seek_timestamp
         else:
             self.seek_timestamp = self.meeting.transcriber_seek_timestamp
-        
+
         self.logger.info(f"seek_timestamp: {self.seek_timestamp}")
         current_time = datetime.now(timezone.utc)
 
         self.connections = await self.meeting.get_connections()
         self.logger.info(f"number of connections: {len(self.connections)}")
         self.connection = best_covering_connection(self.seek_timestamp, current_time, self.connections)
-        
+
         if self.connection:
             self.logger.info(f"Connection ID: {self.connection.id}")
 
@@ -125,28 +140,26 @@ class Processor:
 
             seek = (self.seek_timestamp - self.connection.start_timestamp).total_seconds()
             self.logger.info(f"seek: {seek}")
-
             path = f"/audio/{self.connection.id}.webm"
+
             try:
                 audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, max_length)
+
             except AudioFileCorruptedError:
-                self.logger.error(f'Audio file at {path} is corrupted')
+                self.logger.error(f"Audio file at {path} is corrupted")
                 await self.meeting.delete_connection(self.connection.id)
                 return
-            
+
             except Exception:
-                self.logger.error(f'could nod read file {path} at seek {seek} with length {max_length}')
+                self.logger.error(f"could nod read file {path} at seek {seek} with length {max_length}")
                 await self.meeting.delete_connection(self.connection.id)
                 return
-            
-            
 
             self.slice_duration = audio_slicer.audio.duration_seconds
             self.audio_data = await audio_slicer.export_data()
-            
             return True
 
-    async def diarize(self, pipeline,qdrant_client):
+    async def diarize(self, pipeline, qdrant_client):
         client = SpeakerEmbs(qdrant_client)
 
         output, embeddings = pipeline(io.BytesIO(self.audio_data), return_embeddings=True)
@@ -154,11 +167,13 @@ class Processor:
 
         if len(embeddings) == 0:
             self.logger.info("No embeddings found, skipping...")
-            
+
             self.done = False
         else:
             self.logger.info(f"{len(embeddings)} embeddings found")
-            speakers = [await client.process_speaker_emb(e, self.redis_client, self.connection.user_id) for e in embeddings]
+            speakers = [
+                await client.process_speaker_emb(e, self.redis_client, self.connection.user_id) for e in embeddings
+            ]
 
             segments = [i for i in output.itertracks(yield_label=True)]
             df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
@@ -167,11 +182,13 @@ class Processor:
             result = df.drop(columns=["speaker_id"]).to_dict("records")
 
             diarization = Diarisation(
-                self.meeting.meeting_id, self.redis_client, (result, self.meeting.diarizer_seek_timestamp.isoformat(), self.connection.id)
+                self.meeting.meeting_id,
+                self.redis_client,
+                (result, self.meeting.diarizer_seek_timestamp.isoformat(), self.connection.id),
             )
             await diarization.lpush()
             self.logger.info("pushed")
-            
+
             self.done = True
 
     async def transcribe(self, model):
@@ -181,44 +198,40 @@ class Processor:
             vad_filter=True,
             word_timestamps=True,
             vad_parameters={"threshold": 0.9},
-        ) 
+        )
         segments = [s for s in list(segments)]
         result = list(segments)
         print(result)
         transcription = Transcript(
-            self.meeting.meeting_id, self.redis_client, (result, self.meeting.transcriber_seek_timestamp.isoformat(), self.connection.id)
+            self.meeting.meeting_id,
+            self.redis_client,
+            (result, self.meeting.transcriber_seek_timestamp.isoformat(), self.connection.id),
         )
         if len(result) > 0:
             await transcription.lpush()
             self.logger.info("pushed")
             self.done = True
-            
+
         else:
             self.done = False
-            
-            
+
     async def find_next_seek(self, overlap=0):
         if self.done:
             self.seek_timestamp = (
-                self.seek_timestamp
-                + pd.Timedelta(seconds=self.slice_duration)
-                - pd.Timedelta(seconds=overlap)
+                self.seek_timestamp + pd.Timedelta(seconds=self.slice_duration) - pd.Timedelta(seconds=overlap)
             )
         else:
             next_connection = connection_with_minimal_start_greater_than_target(self.seek_timestamp, self.connections)
             if next_connection:
                 self.seek_timestamp = next_connection.start_timestamp
         self.logger.info(f"seek_timestamp: {self.seek_timestamp}")
-        
-        
+
         if isinstance(self.processor, Diarizer):
             self.meeting.diarizer_seek_timestamp = self.seek_timestamp
         else:
             self.meeting.transcriber_seek_timestamp = self.seek_timestamp
-            
+
         await self.meeting.update_redis()
-            
-            
 
     async def do_finally(self):
         if self.meeting:
