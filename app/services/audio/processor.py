@@ -24,8 +24,8 @@ class Processor:
         connections: List[ExistingConnectionInfo] = await self.stream_queue_service_api.get_connections()
 
         for connection in connections:
-            logger.info(f'Found {connection.amount} chink(s)')
-            await self._process_connection_task(connection.connection_id)
+            logger.info(f"Found {connection.amount} chink(s)")
+            await self._process_connection_task(connection.connection_id)  # ToDo: asyncio task
 
     async def _process_connection_task(self, connection_id, diarizer_step=30, transcriber_step=10):
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)

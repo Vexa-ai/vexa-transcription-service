@@ -17,10 +17,7 @@ add_exception_handlers(app)
 add_event_handlers(app)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://*",
-        "https://*",
-    ],
+    allow_origins=["*"] if settings.debug else ["http://*", "https://*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

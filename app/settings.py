@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     service_api_port: int = 8000
     service_token: str = "service_token"
 
+    debug: bool = False
     check_and_process_connections_interval_sec: float = Field(10.0, env="CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC")
 
     stream_queue_service_list_connections: str

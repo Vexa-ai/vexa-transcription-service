@@ -68,10 +68,10 @@ class Connection:
         data = await self.redis.hgetall(self.type_)
         if data:
             self.start_timestamp = parser.parse(data.get("start_timestamp")).astimezone(UTC)
-            self.end_timestamp   = parser.parse(data.get("end_timestamp")).astimezone(UTC)
+            self.end_timestamp = parser.parse(data.get("end_timestamp")).astimezone(UTC)
             self.user_id = data.get("user_id")
 
-    async  def delete_connection_data(self):
+    async def delete_connection_data(self):
         await self.redis.delete(self.type_)
 
     async def update_timestamps(self, segment_start_timestamp, end_timestamp):
@@ -124,10 +124,9 @@ class Meeting:
 
     async def add_connection(self, connection_id):
         await self.redis.sadd(self.connections_type_, connection_id)
-        
+
     async def delete_connection(self, connection_id):
         await self.redis.srem(self.connections_type_, connection_id)
-
 
     async def get_connections(self):
         connection_ids = await self.redis.smembers(self.connections_type_)
@@ -159,11 +158,10 @@ class Meeting:
             transcriber_last_updated_timestamp if transcriber_last_updated_timestamp else None
         )
         await self.update_redis()
-        
+
     async def delete_meeting_data(self):
         await self.redis.delete(self.metadata_type_)
         await self.redis.delete(self.connections_type_)
-
 
 
 class ProcessorManager:
@@ -204,7 +202,6 @@ def get_timestamps_overlap(start1, end1, start2, end2):
     return max(0, delta)
 
 
-
 # def best_covering_connection(target_start, target_end, connections):
 #     #TODO: change if to choose between connections that are 1 minimimize gap between target start and connection start 2 maximum overlap
 #     best_connection = None
@@ -219,11 +216,10 @@ def get_timestamps_overlap(start1, end1, start2, end2):
 #     return best_connection
 
 
-
 def best_covering_connection(target_start, target_end, connections):
     best_connection = None
-    max_overlap = 0
-    min_start_diff = float('inf')
+    # max_overlap = 0
+    min_start_diff = float("inf")
     overlapped_connections = []
 
     # Find all connections that overlap with the target interval
@@ -231,7 +227,7 @@ def best_covering_connection(target_start, target_end, connections):
         overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
         if overlap > 0:
             overlapped_connections.append(connection)
-    
+
     # If there are no overlapping connections, return None
     if not overlapped_connections:
         return None
@@ -257,6 +253,3 @@ def connection_with_minimal_start_greater_than_target(target_start, connections)
                 best_connection = connection
 
     return best_connection
-
-
-
