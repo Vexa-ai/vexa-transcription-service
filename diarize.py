@@ -32,14 +32,12 @@ async def main():
 
     diarizer = Processor("diarizer", redis_client, logger)
     while True:
-        # try:
+
         ok = await diarizer.read(max_length=240)
         if ok:
             await diarizer.diarize(pipeline, qdrant_client)
             await diarizer.find_next_seek()
-        # except Exception as ex:
-        #     logger.error(ex)
-        # finally:
+
         await diarizer.do_finally()
         await asyncio.sleep(0.1)
 

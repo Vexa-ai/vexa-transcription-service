@@ -25,61 +25,6 @@ from app.services.audio.redis import (
 from app.settings import settings
 
 
-@dataclass
-class SpeakerEmbs:
-    client: Any
-    logger: Any = field(default=logging.getLogger(__name__))
-
-    def get_stored_knn(self, emb: list, user_id):
-        from qdrant_client import QdrantClient, models
-
-        search_result = self.client.search(
-            collection_name="main",
-            query_vector=emb,
-            limit=1,
-            query_filter=models.Filter(
-                must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]
-            ),
-        )
-        if len(search_result) > 0:
-            search_result = search_result[0]
-            return search_result.payload["speaker_id"], search_result.score
-        else:
-            return None, None
-
-    async def add_new_speaker_emb(self, emb: list, redis_client, user_id, speaker_id=None):
-        from qdrant_client import QdrantClient, models
-
-        self.logger.info("Adding new speaker...")
-        speaker_id = speaker_id if speaker_id else str(uuid4())
-        self.client.upsert(
-            collection_name="main",
-            wait=True,
-            points=[
-                models.PointStruct(id=str(uuid4()), vector=emb, payload={"speaker_id": speaker_id, "user_id": user_id})
-            ],
-        )
-        await redis_client.lpush(keys.SPEAKER_EMBEDDINGS, json.dumps((speaker_id, emb.tolist(), user_id)))
-        self.logger.info(f"Added new speaker {speaker_id}")
-        return speaker_id
-
-    async def process_speaker_emb(self, emb: list, redis_client, user_id):
-        speaker_id, score = self.get_stored_knn(emb, user_id)
-        self.logger.info(f"score: {score}")
-
-        if speaker_id:
-            if score > 0.95:
-                pass
-            elif score > 0.70:
-                await self.add_new_speaker_emb(emb, redis_client, user_id, speaker_id=speaker_id)
-            else:
-                speaker_id = await self.add_new_speaker_emb(emb, redis_client, user_id)
-        else:
-            speaker_id = await self.add_new_speaker_emb(emb, redis_client, user_id)
-
-        return str(speaker_id), score
-
-
 def parse_segment(segment):
     return segment[0].start, segment[0].end, int(segment[-1].split("_")[1])
 
@@ -159,7 +104,6 @@ class Processor:
                 return
 
     async def diarize(self, pipeline, qdrant_client):
-        client = SpeakerEmbs(qdrant_client)
 
         output, embeddings = pipeline(io.BytesIO(self.audio_data), return_embeddings=True)
         self.logger.info(len(embeddings))
@@ -170,20 +114,14 @@ class Processor:
             self.done = False
         else:
             self.logger.info(f"{len(embeddings)} embeddings found")
-            speakers = [
-                await client.process_speaker_emb(e, self.redis_client, self.connection.user_id) for e in embeddings
-            ]
 
             segments = [i for i in output.itertracks(yield_label=True)]
-            df = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"])
-            df["speaker"] = df["speaker_id"].replace({i: s[0] for i, s in enumerate(speakers)})
-            df["score"] = df["speaker_id"].replace({i: s[1] for i, s in enumerate(speakers)})
-            result = df.drop(columns=["speaker_id"]).to_dict("records")
+            result = pd.DataFrame([parse_segment(s) for s in segments], columns=["start", "end", "speaker_id"]).to_dict("records")
 
             diarization = Diarisation(
                 self.meeting.meeting_id,
                 self.redis_client,
-                (result, self.meeting.diarizer_seek_timestamp.isoformat(), self.connection.id),
+                (result, embeddings.tolist(),self.meeting.diarizer_seek_timestamp.isoformat(), self.connection.id),
             )
             await diarization.lpush()
             self.logger.info("pushed")
