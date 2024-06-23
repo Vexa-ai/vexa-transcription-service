@@ -33,7 +33,7 @@ async def main():
     diarizer = Processor("diarizer", redis_client, logger)
     while True:
 
-        ok = await diarizer.read(max_length=240)
+        ok = await diarizer.read(max_length=25)
         if ok:
             await diarizer.diarize(pipeline, qdrant_client)
             await diarizer.find_next_seek()
