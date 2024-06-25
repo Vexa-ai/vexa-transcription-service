@@ -27,7 +27,7 @@ async def main():
     transcriber = Processor("transcriber", redis_client, logger)
     while True:
 
-        ok = await transcriber.read(max_length=10)
+        ok = await transcriber.read(max_length=240)
         if ok:
             await transcriber.transcribe(model)
             await transcriber.find_next_seek()
