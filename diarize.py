@@ -1,121 +1,48 @@
-from qdrant_client import QdrantClient, models
-from uuid import uuid4
-from pyannote.audio import Pipeline
-import io
-import pandas as pd
-from audio.redis import *
 import asyncio
+import logging
+
 import torch
-import json
+from pyannote.audio import Pipeline
+from qdrant_client import QdrantClient, models
 
-client = QdrantClient("qdrant",timeout=10)
-#client = QdrantClient("host.docker.internal",timeout=10,port=6333)
-
-def get_stored_knn(emb:list, client_id):
-    search_result = client.search(
-        collection_name='main', 
-        query_vector=emb, 
-        limit=1,
-        query_filter=models.Filter(
-        must=[
-            models.FieldCondition(
-                key="client_id",
-                match=models.MatchValue(
-                    value=client_id,
-                ),
-            )
-        ]
-    ),  
-        )
-    if len(search_result)>0:
-        search_result = search_result[0]
-        return search_result.payload['speaker_id'], search_result.score
-    else: return None,None
-
-
-async def add_new_speaker_emb(emb:list,redis_client, client_id,speaker_id=None):
-    log('adding new speaker')
-    speaker_id = speaker_id if speaker_id else str(uuid4())
-
-    client.upsert(
-        collection_name='main',
-        wait=True,
-        points=[models.PointStruct(id=str(uuid4()), vector=emb,payload={'speaker_id':speaker_id,'client_id':client_id})]
-
-    )
-
-    await redis_client.lpush('Embeddings', json.dumps((speaker_id,emb.tolist(), client_id)))
-    
-    return speaker_id
-
-
-
-async def process_speaker_emb(emb:list,redis_client, client_id):
-    speaker_id, score = get_stored_knn(emb, client_id)
-    log(score)
-    if speaker_id:
-        if score > 0.95:
-            pass
-        elif score > 0.75:
-            await add_new_speaker_emb(emb,redis_client, client_id,speaker_id=speaker_id)
-        else:
-            speaker_id = await add_new_speaker_emb(emb,redis_client, client_id)
-    else:
-        speaker_id = await add_new_speaker_emb(emb,redis_client, client_id)
-
-    return str(speaker_id), score
-
-
-def parse_segment(segment):
-    return segment[0].start, segment[0].end,int(segment[-1].split('_')[1])
-
-async def process(redis_client):
-    try:
-        _,item = await redis_client.brpop('Audio2DiarizeQueue')
-        log('here')
-        audio_name,client_id = item.split(':')
-        audio = Audio(audio_name,redis_client)
-        if await audio.get():
-            output, embeddings = pipeline(io.BytesIO(audio.data), return_embeddings=True)
-            if len(embeddings)==0: audio.delete()
-        else:
-            assert 'no audio'
-        speakers =[await process_speaker_emb(e,redis_client, client_id) for e in embeddings]
-        segments = [i for i in output.itertracks(yield_label=True)]
-        df = pd.DataFrame([parse_segment(s) for s in segments],columns = ['start','end','speaker_id'])
-        df['speaker'] = df['speaker_id'].replace({i:s[0] for i,s in enumerate(speakers)})
-        df['score'] = df['speaker_id'].replace({i:s[1] for i,s in enumerate(speakers)})
-        diarization_data = df.drop(columns=['speaker_id']).to_dict('records')
-        await Diarisation(audio_name,redis_client,diarization_data).save()
-        await redis_client.lpush(f'DiarizeReady:{audio_name}', 'Done')
-        log('done')
-    except Exception as e:
-        log(e)
-        await redis_client.rpush('Audio2DiarizeQueue', f'{audio_name}:{client_id}')
-    
+from app.database_redis.connection import get_redis_client
+from app.settings import settings
+from processor import Processor
 
 
 async def main():
-    redis_client = await get_inner_redis()
-    try:
-        while True:
-            await process(redis_client)
-    except KeyboardInterrupt:
-        pass 
-    finally:
-        redis_client.close()
-      #  await redis_client.wait_closed()
+    # Configure logger
+    logger = logging.getLogger("diarize")
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
+    logger.info("Running diarize loop...")
 
-if __name__ == '__main__':
-
+    redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
-        use_auth_token="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")
+        use_auth_token="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",
+    )
     pipeline.to(torch.device("cuda"))
-                               
-                               
+    qdrant_client = QdrantClient("qdrant", timeout=10)
+
+    diarizer = Processor("diarizer", redis_client, logger)
+    while True:
+        # try:
+        ok = await diarizer.read(max_length=240)
+        if ok:
+            await diarizer.diarize(pipeline, qdrant_client)
+            await diarizer.find_next_seek()
+        # except Exception as ex:
+        #     logger.error(ex)
+        # finally:
+        await diarizer.do_finally()
+        await asyncio.sleep(0.1)
 
 
+if __name__ == "__main__":
     asyncio.run(main())

@@ -1,88 +1,97 @@
-# prod !!!
-
-
 version: '3.8'
 
 services:
+  qdrant:
+    image: qdrant/qdrant
+    restart: unless-stopped
+    volumes:
+      - ${VOLUME_DATA_PATH}/qdrant:/qdrant/storage
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    # ports:
+    #   - "${REDIS_IMAGE_PORT}:6379"
+    volumes:
+      - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
+
   diarize:
+    depends_on:
+      - qdrant
+      - redis
     #command: tail -f /dev/null
     command: ['python3','diarize.py']
 
     # build:
     #   context: docker
-    #   dockerfile: DiarizeDockerfile
-    image: diarize:0.2
+    #   dockerfile: DiarizeDockerfile #add ffmpeg to Dockerfile
+    image: diarize:0.3
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/usr/src/app
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
-    
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock
 
-
-    depends_on:
-      - qdrant
-
-    deploy:
-      replicas: 2  # Specify the number of instances you want
 
   transcribe:
+    depends_on:
+      - redis
     command: ['python3','transcribe.py']
     #command: tail -f /dev/null
 
-    # build:
+    #build:
       # context: docker
       # dockerfile: TranscribeDockerfile
-    image: transcribe:0.1
+      ### error  libcublas.so.12 is not found or cannot be loaded
+    image: transcribe:0.2
     restart: unless-stopped
     runtime: nvidia
     volumes:
-    - .:/usr/src/app
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}/logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock
 
-    deploy:
-      replicas: 2  # Specify the number of instances you want
-
-  audio:
-    #command: tail -f /dev/null
-    command: ['python','process_connections.py']
-
-    #build: 
-      # context: docker
-      # dockerfile: MainDockerfile
-    image: audio:0.2
+  api:
+    #image: audio_api
     restart: unless-stopped
-    runtime: nvidia
-    volumes:
-    - .:/usr/src/app
-    - ${DATA_PATH}/audio:/audio
-    - ${DATA_PATH}/logs:/logs
-    - /var/run/docker.sock:/var/run/docker.sock
-
-    extra_hosts:
-       - "host.docker.internal:host-gateway" #to connect to host port - stream queue. Will be remote host
-
-  
-  qdrant:
-    image: qdrant/qdrant
-    volumes:
-
-    - ${DATA_PATH}/qdrant:/qdrant/storage
-
-    restart: unless-stopped
-
-
-  redis:
-    image: redis:latest
-    restart: unless-stopped
+    build: 
+      context: docker
+      dockerfile: MainDockerfile
     ports:
-      - "${AUDIO_REDIS_PORT}:6379" #needs to be exposed outside for remote connection of the main server
+      - "${SERVICE_API_PORT}:${SERVICE_API_PORT}"
+    depends_on:
+      - redis
+    environment:
+      SERVICE_VERSION: ${SERVICE_VERSION}
+      SERVICE_NAME: ${SERVICE_NAME}
+      SERVICE_API_HOST: ${SERVICE_API_HOST}
+      SERVICE_API_PORT: ${SERVICE_API_PORT}
+      SERVICE_TOKEN: ${SERVICE_TOKEN}
+
+      DEBUG: ${DEBUG}
+      CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC: ${CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC}
+
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      STREAM_QUEUE_SERVICE_LIST_CONNECTIONS: ${STREAM_QUEUE_SERVICE_LIST_CONNECTIONS}
+      STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS: ${STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS}
+      STREAM_QUEUE_SERVICE_HEALTH: ${STREAM_QUEUE_SERVICE_HEALTH}
+      STREAM_QUEUE_SERVICE_HEALTH_CHECK: ${STREAM_QUEUE_SERVICE_HEALTH_CHECK}
+      STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
+      STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
+
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
+    #command: tail -f /dev/null
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # to connect to host ports
     volumes:
-    - ${DATA_PATH}/docker_redis_audio:/data
-
-
- #docker compose -f /home/dima/1/1_audio/docker-compose.yml -p prod_1 up -d
+      - .:/usr/src/app
+      - ../library:/usr/src/library
+      - ${VOLUME_DATA_PATH}/audio:/audio

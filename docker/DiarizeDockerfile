@@ -3,7 +3,7 @@ FROM nvidia/cuda:11.7.1-cudnn8-devel-ubuntu22.04
 
 WORKDIR /usr/src/app
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y python3.10 python3-pip
+RUN apt-get update && apt-get install -y python3.10 python3-pip ffmpeg
 
 
 

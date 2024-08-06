@@ -1,56 +1,42 @@
+import asyncio
+import logging
 
-from audio.redis import *
-from audio.audio import *
-import io
 from faster_whisper import WhisperModel
 
-import json
-
-import asyncio
-
-import time
-
-
-async def process(redis_client):
-    try:
-        _,item = await redis_client.brpop('Audio2TranscribeQueue')
-        log('received')
-        audio_name,client_id = item.split(':')
-        audio = Audio(audio_name,redis_client)
-        if await audio.get():
-            log('here')
-            segments, _ = model.transcribe(io.BytesIO(audio.data), beam_size=5,vad_filter=True,word_timestamps=True)
-            segments = [s for s in list(segments)]
-            log('done')
-            transcription = [[w._asdict() for w in s.words] for s in segments]
-            await Transcript(audio_name,redis_client,transcription).save()
-            await redis_client.lpush(f'TranscribeReady:{audio_name}', 'Done')
-            log('done')
-    except Exception as e:
-        log(e)
-        await redis_client.rpush('Audio2TranscribeQueue', f'{audio_name}:{client_id}')
+from app.database_redis.connection import get_redis_client
+from app.settings import settings
+from processor import Processor
 
 
 async def main():
-    redis_client = await get_inner_redis()
-    while True:
-        
-    # try:
-    #     while True:
-    #         await process(redis_client)
-    # except KeyboardInterrupt:
-    #     pass 
-    # finally:
-    #     redis_client.close()
+    # Configure logger
+    logger = logging.getLogger("transcribe")
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
-        await process(redis_client)
+    logger.info("Running transcribe loop...")
 
+    redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
 
-if __name__ == '__main__':
     model_size = "large-v3"
     model = WhisperModel(model_size, device="cuda", compute_type="float16")
-    log('model loaded')
-    
-    # log('test')
-    asyncio.run(main())
 
+    transcriber = Processor("transcriber", redis_client, logger)
+    while True:
+        # try:
+        ok = await transcriber.read(max_length=240)
+        if ok:
+            await transcriber.transcribe(model)
+            await transcriber.find_next_seek()
+        # except Exception as ex:
+        #     logger.error(ex)
+        # finally:
+        await transcriber.do_finally()
+        await asyncio.sleep(0.1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
