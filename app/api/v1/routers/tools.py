@@ -39,7 +39,7 @@ async def start_diarization(diarization_start: DiarizationStart):
     await diarizer.add_todo(meeting.meeting_id)
     await meeting.update_diarizer_timestamp(
         diarization_start.start_timestamp,
-        diarizer_last_updated_timestamp=diarization_start.start_timestamp,
+        diarizer_last_updated_timestamp=diarization_start.diarizer_last_updated_timestamp,
     )
     await meeting.update_redis()
 
@@ -67,6 +67,7 @@ async def start_transcribing(transcribing_start: TranscribingStart):
     transcriber = Transcriber(client)
     await transcriber.add_todo(meeting.meeting_id)
     await meeting.update_transcriber_timestamp(
-        transcribing_start.start_timestamp, transcriber_last_updated_timestamp=transcribing_start.start_timestamp
+        transcribing_start.start_timestamp,
+        transcriber_last_updated_timestamp=transcribing_start.transcriber_last_updated_timestamp,
     )
     await meeting.update_redis()
