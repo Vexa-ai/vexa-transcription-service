@@ -3,7 +3,7 @@ import logging.config
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field, validator
+from pydantic import validator
 from pydantic_settings import BaseSettings
 
 
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     service_token: str = "service_token"
 
     debug: bool = False
-    check_and_process_connections_interval_sec: float = Field(10.0, env="CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC")
+    check_and_process_connections_interval_sec: int = 2
 
     stream_queue_service_list_connections: str
     stream_queue_service_get_next_chunks: str
@@ -30,12 +30,6 @@ class Settings(BaseSettings):
     redis_port: int
     redis_password: Optional[str] = None
 
-    @validator("check_and_process_connections_interval_sec", pre=True, always=True)
-    def validate_interval(cls, v):
-        if isinstance(v, str) and not v.strip():
-            return 10.0  # default value if empty string
-        return float(v)
-
     class Config:
         # filename that contains environment variables
         env_file = Path(__file__).absolute().parent.parent / ".env"
@@ -44,6 +38,3 @@ class Settings(BaseSettings):
 
 logging.config.fileConfig(fname=Path(__file__).parent / "logger.conf", disable_existing_loggers=False)
 settings = Settings()
-
-# Print the value to debug
-print("check_and_process_connections_interval_sec:", settings.check_and_process_connections_interval_sec)

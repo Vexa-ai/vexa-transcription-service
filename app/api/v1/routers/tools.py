@@ -23,5 +23,5 @@ async def get_diarization_queue_size():
 @router.get("/transcribing-queue-size")
 async def get_transcribing_queue_size():
     client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-    queue_size = await client.scard("transcribe:todo")
+    queue_size = await client.dbsize("transcribe:todo")
     return {"amount": queue_size}
