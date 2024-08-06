@@ -41,6 +41,7 @@ async def start_diarization(diarization_start: DiarizationStart):
         diarization_start.start_timestamp,
         diarizer_last_updated_timestamp=diarization_start.start_timestamp,
     )
+    await meeting.update_redis()
 
 
 @router.get("/transcribing/queue-size")
@@ -68,3 +69,4 @@ async def start_transcribing(transcribing_start: TranscribingStart):
     await meeting.update_transcriber_timestamp(
         transcribing_start.start_timestamp, transcriber_last_updated_timestamp=transcribing_start.start_timestamp
     )
+    await meeting.update_redis()
