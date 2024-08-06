@@ -25,7 +25,7 @@ async def get_diarization_queue_size():
 @router.post("/diarization/start")
 async def start_diarization(diarization_start: DiarizationStart):
     client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-    connection = Connection(client, diarization_start.connection_id, diarization_start.user_id)
+    connection = Connection(client, diarization_start.connection_id, str(diarization_start.user_id))
     await connection.update_timestamps(diarization_start.start_timestamp, diarization_start.end_timestamp)
 
     meeting = Meeting(client, diarization_start.connection_id)
@@ -53,7 +53,7 @@ async def get_transcribing_queue_size():
 @router.post("/transcribing/start")
 async def start_transcribing(transcribing_start: TranscribingStart):
     client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-    connection = Connection(client, transcribing_start.connection_id, transcribing_start.user_id)
+    connection = Connection(client, transcribing_start.connection_id, str(transcribing_start.user_id))
     await connection.update_timestamps(transcribing_start.start_timestamp, transcribing_start.end_timestamp)
 
     meeting = Meeting(client, transcribing_start.connection_id)
