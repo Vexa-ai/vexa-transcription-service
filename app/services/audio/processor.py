@@ -27,7 +27,12 @@ class Processor:
             logger.info(f"Found {connection.amount} chink(s)")
             await self._process_connection_task(connection.connection_id)  # ToDo: asyncio task
 
-    async def _process_connection_task(self, connection_id, diarizer_step: int = 30, transcriber_step: int = 5) -> None:
+    async def _process_connection_task(
+        self,
+        connection_id,
+        diarizer_step: int = 30,
+        transcriber_step: int = 10,
+    ) -> None:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.writestream2file(connection_id)
 
