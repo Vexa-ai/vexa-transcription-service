@@ -191,6 +191,7 @@ class Processor:
             self.done = True
 
     async def transcribe(self, model):
+        # ToDo: чтение файла занимает время (~20 сек)
         segments, _ = model.transcribe(
             io.BytesIO(self.audio_data),
             beam_size=5,
@@ -216,6 +217,7 @@ class Processor:
 
     async def find_next_seek(self, overlap=0):
         if self.done:
+            print(f'[self.done ({self.done})]self.slice_duration: {self.slice_duration}')
             self.seek_timestamp = (
                 self.seek_timestamp + pd.Timedelta(seconds=self.slice_duration) - pd.Timedelta(seconds=overlap)
             )
