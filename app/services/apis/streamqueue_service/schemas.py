@@ -22,3 +22,4 @@ class AudioChunkInfo(BaseModel):
     user_id: str
     chunk: str
     timestamp: str
+    audio_chunk_duration_sec: int

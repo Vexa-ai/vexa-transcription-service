@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from redis.asyncio import Redis
@@ -81,11 +81,12 @@ class Processor:
 
             for item in items:
                 chunk = bytes.fromhex(item.chunk)
-                first_timestamp = (
+                first_timestamp: datetime = (
                     datetime.fromisoformat(item.timestamp.rstrip("Z")).astimezone(timezone.utc)
                     if not first_timestamp
                     else first_timestamp
                 )
+                first_timestamp = first_timestamp - timedelta(seconds=item.audio_chunk_duration_sec)
 
                 # Open the file in append mode
                 with open(path, "ab") as file:
