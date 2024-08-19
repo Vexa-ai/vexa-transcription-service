@@ -83,10 +83,10 @@ class Processor:
                 chunk = bytes.fromhex(item.chunk)
                 first_timestamp: datetime = (
                     datetime.fromisoformat(item.timestamp.rstrip("Z")).astimezone(timezone.utc)
+                    - timedelta(seconds=item.audio_chunk_duration_sec)
                     if not first_timestamp
                     else first_timestamp
                 )
-                first_timestamp = first_timestamp - timedelta(seconds=item.audio_chunk_duration_sec)
 
                 # Open the file in append mode
                 with open(path, "ab") as file:
