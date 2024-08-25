@@ -191,7 +191,6 @@ class Processor:
             self.done = True
 
     async def transcribe(self, model):
-        # ToDo: чтение файла занимает время (~20 сек)
         segments, _ = model.transcribe(
             io.BytesIO(self.audio_data),
             beam_size=5,
