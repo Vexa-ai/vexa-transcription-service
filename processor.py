@@ -1,17 +1,16 @@
-import asyncio
 import io
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Union
 from uuid import uuid4
 
 import pandas as pd
+from qdrant_client import models
 from redis.asyncio.client import Redis
 
-from app.database_redis import keys
-from app.database_redis.connection import get_redis_client
+from app.clients.database_redis import keys
 from app.services.audio.audio import AudioFileCorruptedError, AudioSlicer
 from app.services.audio.redis import (
     Diarisation,
@@ -22,7 +21,6 @@ from app.services.audio.redis import (
     best_covering_connection,
     connection_with_minimal_start_greater_than_target,
 )
-from app.settings import settings
 
 
 @dataclass
@@ -31,7 +29,6 @@ class SpeakerEmbs:
     logger: Any = field(default=logging.getLogger(__name__))
 
     def get_stored_knn(self, emb: list, user_id):
-        from qdrant_client import QdrantClient, models
 
         search_result = self.client.search(
             collection_name="main",
@@ -48,8 +45,6 @@ class SpeakerEmbs:
             return None, None
 
     async def add_new_speaker_emb(self, emb: list, redis_client, user_id, speaker_id=None):
-        from qdrant_client import QdrantClient, models
-
         self.logger.info("Adding new speaker...")
         speaker_id = speaker_id if speaker_id else str(uuid4())
         self.client.upsert(

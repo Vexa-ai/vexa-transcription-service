@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from app.database_redis import keys
-from app.database_redis.dals.base import BaseDAL
+from app.clients.database_redis import keys
+from app.clients.database_redis.dals.base import BaseDAL
 
 
 class ConnectionDAL(BaseDAL):

@@ -3,8 +3,8 @@ from typing import List
 from fastapi import APIRouter
 
 from app.api.v1.schemas.segment import Segment
-from app.database_redis.connection import get_redis_client
-from app.database_redis.dals import SegmentDAL
+from app.clients.database_redis.connection import get_redis_client
+from app.clients.database_redis.dals import SegmentDAL
 from app.settings import settings
 
 router = APIRouter(prefix="/segments", tags=["segments"])

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.schemas.tools import DiarizationStart, TranscribingStart
-from app.database_redis.connection import get_redis_client
+from app.clients.database_redis.connection import get_redis_client
 from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
 

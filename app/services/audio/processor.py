@@ -4,10 +4,10 @@ from typing import List
 
 from redis.asyncio import Redis
 
-from app.database_redis.connection import get_redis_client
-from app.database_redis.dals.connection_dal import ConnectionDAL
-from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
-from app.services.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
+from app.clients.database_redis.connection import get_redis_client
+from app.clients.database_redis.dals.connection_dal import ConnectionDAL
+from app.clients.apis.streamqueue_service.client import StreamQueueServiceAPI
+from app.clients.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
 from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
 
@@ -53,7 +53,7 @@ class Processor:
         )
 
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
-            print("diarizer added")
+            logger.info("diarizer added")
             diarizer = Diarizer(redis_client)
             await diarizer.add_todo(meeting.meeting_id)
             await meeting.update_diarizer_timestamp(
@@ -61,7 +61,7 @@ class Processor:
             )
 
         if (current_time - meeting.transcriber_last_updated_timestamp).seconds > transcriber_step:
-            print("transcriber added")
+            logger.info("transcriber added")
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.meeting_id)
             await meeting.update_transcriber_timestamp(
