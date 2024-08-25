@@ -1,13 +1,13 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from redis.asyncio import Redis
 
-from app.database_redis.connection import get_redis_client
-from app.database_redis.dals.connection_dal import ConnectionDAL
-from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
-from app.services.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
+from app.clients.database_redis.connection import get_redis_client
+from app.clients.database_redis.dals.connection_dal import ConnectionDAL
+from app.clients.apis.streamqueue_service.client import StreamQueueServiceAPI
+from app.clients.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
 from app.services.audio.redis import Connection, Diarizer, Meeting, Transcriber
 from app.settings import settings
 
@@ -27,7 +27,12 @@ class Processor:
             logger.info(f"Found {connection.amount} chink(s)")
             await self._process_connection_task(connection.connection_id)  # ToDo: asyncio task
 
-    async def _process_connection_task(self, connection_id, diarizer_step=30, transcriber_step=10):
+    async def _process_connection_task(
+        self,
+        connection_id,
+        diarizer_step: int = 30,
+        transcriber_step: int = 10,
+    ) -> None:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
         meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.writestream2file(connection_id)
 
@@ -48,7 +53,7 @@ class Processor:
         )
 
         if (current_time - meeting.diarizer_last_updated_timestamp).seconds > diarizer_step:
-            print("diarizer added")
+            logger.info("diarizer added")
             diarizer = Diarizer(redis_client)
             await diarizer.add_todo(meeting.meeting_id)
             await meeting.update_diarizer_timestamp(
@@ -56,7 +61,7 @@ class Processor:
             )
 
         if (current_time - meeting.transcriber_last_updated_timestamp).seconds > transcriber_step:
-            print("transcriber added")
+            logger.info("transcriber added")
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.meeting_id)
             await meeting.update_transcriber_timestamp(
@@ -76,8 +81,9 @@ class Processor:
 
             for item in items:
                 chunk = bytes.fromhex(item.chunk)
-                first_timestamp = (
+                first_timestamp: datetime = (
                     datetime.fromisoformat(item.timestamp.rstrip("Z")).astimezone(timezone.utc)
+                    - timedelta(seconds=item.audio_chunk_duration_sec)
                     if not first_timestamp
                     else first_timestamp
                 )

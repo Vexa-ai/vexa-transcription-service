@@ -3,8 +3,8 @@ from typing import List
 from fastapi import APIRouter
 
 from app.api.v1.schemas.speaker import SpeakerEmbeddings
-from app.database_redis.connection import get_redis_client
-from app.database_redis.dals import SpeakerDAL
+from app.clients.database_redis.connection import get_redis_client
+from app.clients.database_redis.dals import SpeakerDAL
 from app.settings import settings
 
 router = APIRouter(prefix="/speakers", tags=["speakers"])

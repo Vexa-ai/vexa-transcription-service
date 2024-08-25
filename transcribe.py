@@ -3,7 +3,7 @@ import logging
 
 from faster_whisper import WhisperModel
 
-from app.database_redis.connection import get_redis_client
+from app.clients.database_redis.connection import get_redis_client
 from app.settings import settings
 from processor import Processor
 
