@@ -3,7 +3,6 @@ import logging.config
 from pathlib import Path
 from typing import Optional
 
-from pydantic import validator
 from pydantic_settings import BaseSettings
 
 

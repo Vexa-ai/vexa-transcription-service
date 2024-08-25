@@ -3,9 +3,9 @@ import logging
 
 import torch
 from pyannote.audio import Pipeline
-from qdrant_client import QdrantClient, models
+from qdrant_client import QdrantClient
 
-from app.database_redis.connection import get_redis_client
+from app.clients.database_redis import get_redis_client
 from app.settings import settings
 from processor import Processor
 

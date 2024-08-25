@@ -10,14 +10,14 @@ from httpx import (
     ReadTimeout,
 )
 
-from app.services.apis.base import BaseAPI
-from app.services.apis.enums import HTTPMethod
-from app.services.apis.streamqueue_service.exceptions import (
+from app.clients.apis.base import BaseAPI
+from app.clients.apis.enums import HTTPMethod
+from app.clients.apis.streamqueue_service.exceptions import (
     StreamQueueServiceBaseError,
     StreamQueueServiceRequestError,
     StreamQueueServiceTimeoutError,
 )
-from app.services.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
+from app.clients.apis.streamqueue_service.schemas import AudioChunkInfo, ExistingConnectionInfo
 from app.services.health.schemas import Health
 from app.settings import settings
 

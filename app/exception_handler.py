@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.database_redis.exceptions import DataNotFoundError, RedisConnectionError
+from app.clients.database_redis.exceptions import DataNotFoundError, RedisConnectionError
 
 
 def add_exception_handlers(app: FastAPI) -> None:

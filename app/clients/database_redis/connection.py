@@ -4,7 +4,7 @@ from typing import Optional
 from redis.asyncio.client import Redis
 from redis.exceptions import ConnectionError
 
-from app.database_redis.exceptions import RedisConnectionError
+from app.clients.database_redis.exceptions import RedisConnectionError
 
 
 async def get_redis_client(host: str, port: int, password: Optional[str] = None) -> Redis:

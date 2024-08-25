@@ -6,7 +6,7 @@ from typing import Any
 
 from redis.asyncio.client import Redis
 
-from app.database_redis.exceptions import DataNotFoundError
+from app.clients.database_redis.exceptions import DataNotFoundError
 
 logger = logging.getLogger(__name__)
 

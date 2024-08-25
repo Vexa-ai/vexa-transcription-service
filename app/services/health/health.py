@@ -1,10 +1,10 @@
 """Module for checking the status (health) of the service."""
 import logging
 
-from app.database_redis.connection import get_redis_client
-from app.database_redis.exceptions import RedisConnectionError
-from app.services.apis.streamqueue_service.client import StreamQueueServiceAPI
-from app.services.apis.streamqueue_service.exceptions import StreamQueueServiceBaseError
+from app.clients.database_redis.connection import get_redis_client
+from app.clients.database_redis.exceptions import RedisConnectionError
+from app.clients.apis.streamqueue_service.client import StreamQueueServiceAPI
+from app.clients.apis.streamqueue_service.exceptions import StreamQueueServiceBaseError
 from app.services.health.enums import Entry
 from app.services.health.schemas import Health, HealthCommon
 from app.settings import settings

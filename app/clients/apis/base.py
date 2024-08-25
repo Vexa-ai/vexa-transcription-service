@@ -3,7 +3,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from app.services.apis.enums import HTTPMethod
+from app.clients.apis.enums import HTTPMethod
 
 
 class BaseAPI(ABC):

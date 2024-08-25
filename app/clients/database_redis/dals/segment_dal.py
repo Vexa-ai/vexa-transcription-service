@@ -1,8 +1,8 @@
 """Module for basic work with radishes (get value, put value, check connection)."""
 import logging
 
-from app.database_redis import keys
-from app.database_redis.dals.base import BaseDAL
+from app.clients.database_redis import keys
+from app.clients.database_redis.dals.base import BaseDAL
 
 logger = logging.getLogger(__name__)
 
