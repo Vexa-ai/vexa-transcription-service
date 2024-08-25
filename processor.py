@@ -7,7 +7,6 @@ from typing import Any, Union
 from uuid import uuid4
 
 import pandas as pd
-from qdrant_client import models
 from redis.asyncio.client import Redis
 
 from app.clients.database_redis import keys
@@ -29,6 +28,7 @@ class SpeakerEmbs:
     logger: Any = field(default=logging.getLogger(__name__))
 
     def get_stored_knn(self, emb: list, user_id):
+        from qdrant_client import models
 
         search_result = self.client.search(
             collection_name="main",
