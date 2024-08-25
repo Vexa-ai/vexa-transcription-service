@@ -217,9 +217,6 @@ class Processor:
 
     async def find_next_seek(self, overlap=0):
         if self.done:
-            print(f'[self.done ({self.done})]self.slice_duration: {self.slice_duration}')
-            print(pd.Timedelta(seconds=self.slice_duration))
-            print(self.seek_timestamp - pd.Timedelta(seconds=self.slice_duration))
             self.seek_timestamp = (
                 self.seek_timestamp + pd.Timedelta(seconds=self.slice_duration) - pd.Timedelta(seconds=overlap)
             )
