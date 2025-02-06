@@ -40,11 +40,6 @@ class Transcript(Data):
         super().__init__(key=f"{SEGMENTS_TRANSCRIBE}:{meeting_id}", redis_client=redis_client, data=data)
 
 
-class Diarisation(Data):
-    def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
-        super().__init__(key=f"{SEGMENTS_DIARIZE}:{meeting_id}", redis_client=redis_client, data=data)
-
-
 class Connection:
     def __init__(self, redis_client: Redis, connection_id, user_id=None):
         self.redis = redis_client
@@ -182,11 +177,6 @@ class ProcessorManager:
 
     async def remove(self, task_id: str):
         await self.redis.srem(self.in_progress_type_, task_id)
-
-
-class Diarizer(ProcessorManager):
-    def __init__(self, redis_client: Redis):
-        super().__init__(redis_client, "Diarize")
 
 
 class Transcriber(ProcessorManager):
