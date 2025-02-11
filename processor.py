@@ -1,6 +1,8 @@
 import io
 import json
 import logging
+import aiohttp
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Union
@@ -41,6 +43,8 @@ async def get_next_chunk_start(diarization_result, length, shift):
 class Processor:
     redis_client: Redis
     logger: Any = field(default=logging.getLogger(__name__))
+    whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL", "https://transcribe.dev.vexa.ai"))
+    whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN", "default_token_change_me"))
 
     def __post_init__(self):
         self.processor = Transcriber(self.redis_client)
@@ -92,53 +96,61 @@ class Processor:
                 await self.meeting.delete_connection(self.connection.id)
                 return
 
-    async def transcribe(self, model):
-        segments, _ = model.transcribe(
-            io.BytesIO(self.audio_data),
-            beam_size=5,
-            vad_filter=True,
-            word_timestamps=True,
-            vad_parameters={"threshold": 0.9},
-        )
-        segments = [s for s in list(segments)]
+    async def transcribe(self):
+        try:
+            headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.whisper_service_url, data=self.audio_data, headers=headers) as response:
+                    if response.status != 200:
+                        self.logger.error(f"Whisper service error: {response.status}")
+                        if response.status == 401:
+                            self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
+                        self.done = False
+                        return
+                    
+                    result = await response.json()
+                    text = result["transcription"]
 
-        # Convert segments to TranscriptSegment objects
-        transcript_segments = []
-        for seg in segments:
-            segment = TranscriptSegment(
-                content=seg.text,
-                start_timestamp=self.seek_timestamp + pd.Timedelta(seconds=seg.start),
-                end_timestamp=self.seek_timestamp + pd.Timedelta(seconds=seg.end)
-            )
-            transcript_segments.append(segment)
+                    # Since we don't get word timestamps from the service, we'll create a single segment
+                    transcript_segments = [
+                        TranscriptSegment(
+                            content=text,
+                            start_timestamp=self.seek_timestamp,
+                            end_timestamp=self.seek_timestamp + pd.Timedelta(seconds=self.slice_duration)
+                        )
+                    ]
 
-        # Get speaker activities
-        speaker_activities = await self._get_speaker_activities()
+                    # Get speaker activities
+                    speaker_activities = await self._get_speaker_activities()
 
-        # Match speakers to segments
-        matched_segments = self.matcher.match_segments(transcript_segments, speaker_activities)
+                    # Match speakers to segments
+                    matched_segments = self.matcher.match_segments(transcript_segments, speaker_activities)
 
-        # Prepare for storage
-        result = []
-        for segment in matched_segments:
-            result.append({
-                "text": segment.content,
-                "start": segment.start_timestamp.isoformat(),
-                "end": segment.end_timestamp.isoformat(),
-                "speaker": segment.speaker,
-                "confidence": segment.confidence
-            })
+                    # Prepare for storage
+                    result = []
+                    for segment in matched_segments:
+                        result.append({
+                            "text": segment.content,
+                            "start": segment.start_timestamp.isoformat(),
+                            "end": segment.end_timestamp.isoformat(),
+                            "speaker": segment.speaker,
+                            "confidence": segment.confidence
+                        })
 
-        if result:
-            transcription = Transcript(
-                self.meeting.meeting_id,
-                self.redis_client,
-                (result, self.meeting.transcriber_seek_timestamp.isoformat(), self.connection.id),
-            )
-            await transcription.lpush()
-            self.logger.info("pushed")
-            self.done = True
-        else:
+                    if result:
+                        transcription = Transcript(
+                            self.meeting.meeting_id,
+                            self.redis_client,
+                            (result, self.meeting.transcriber_seek_timestamp.isoformat(), self.connection.id),
+                        )
+                        await transcription.lpush()
+                        self.logger.info("pushed")
+                        self.done = True
+                    else:
+                        self.done = False
+
+        except Exception as e:
+            self.logger.error(f"Error calling whisper service: {str(e)}")
             self.done = False
 
     async def _get_speaker_activities(self) -> List[SpeakerMeta]:

@@ -1,6 +1,7 @@
 aiomisc==17.3.23
 aiogram==3.3.0
 alembic==1.12.1
+aiohttp>=3.8.0 
 asyncpg==0.29.0
 fastapi==0.110.1
 httpx==0.26.0

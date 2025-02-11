@@ -1,41 +1,39 @@
 import asyncio
 import logging
 
-from faster_whisper import WhisperModel
-
 from app.clients.database_redis.connection import get_redis_client
 from app.settings import settings
 from processor import Processor
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 async def main():
-    # Configure logger
-    logger = logging.getLogger("transcribe")
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    logger.info("Starting transcription process")
+    logger.info(f"Redis settings - Host: {settings.redis_host}, Port: {settings.redis_port}")
 
-    logger.info("Running transcribe loop...")
+    try:
+        redis_client = await get_redis_client(settings.redis_host, settings.redis_port)
 
-    redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-
-    model_size = "large-v3"
-    model = WhisperModel(model_size, device="cuda", compute_type="float16")
-
-    transcriber = Processor("transcriber", redis_client, logger)
-    while True:
-        # try:
-        ok = await transcriber.read(max_length=240)
-        if ok:
-            await transcriber.transcribe(model)
-            await transcriber.find_next_seek()
-        # except Exception as ex:
-        #     logger.error(ex)
-        # finally:
-        await transcriber.do_finally()
-        await asyncio.sleep(0.1)
+        processor = Processor(redis_client, logger)
+        while True:
+            try:
+                ok = await processor.read(max_length=240)
+                if ok:
+                    await processor.transcribe()  # Removed unnecessary None parameter
+                    await processor.find_next_seek()
+            except Exception as ex:
+                logger.error(f"Error in transcription loop: {ex}")
+            finally:
+                await processor.do_finally()
+                await asyncio.sleep(0.1)
+    except Exception as e:
+        logger.error(f"Error in main process: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":

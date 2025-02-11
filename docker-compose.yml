@@ -1,67 +1,21 @@
-version: '3.8'
+name: dev_audio
 
 services:
-  qdrant:
-    image: qdrant/qdrant
-    restart: unless-stopped
-    volumes:
-      - ${VOLUME_DATA_PATH}/qdrant:/qdrant/storage
-
   redis:
     image: redis:latest
     restart: unless-stopped
-    # ports:
-    #   - "${REDIS_IMAGE_PORT}:6379"
+    networks:
+      - audio_network
     volumes:
       - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
 
-  diarize:
-    depends_on:
-      - qdrant
-      - redis
-    #command: tail -f /dev/null
-    command: ['python3','diarize.py']
-
-    # build:
-    #   context: docker
-    #   dockerfile: DiarizeDockerfile #add ffmpeg to Dockerfile
-    image: diarize:0.3
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
-      - ${VOLUME_DATA_PATH}/logs:/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-
-
-  transcribe:
-    depends_on:
-      - redis
-    command: ['python3','transcribe.py']
-    #command: tail -f /dev/null
-
-    #build:
-      # context: docker
-      # dockerfile: TranscribeDockerfile
-      ### error  libcublas.so.12 is not found or cannot be loaded
-    image: transcribe:0.2
-    restart: unless-stopped
-    runtime: nvidia
-    volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
-      - ${VOLUME_DATA_PATH}/logs:/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-
   api:
-    #image: audio_api
     restart: unless-stopped
     build: 
       context: docker
       dockerfile: MainDockerfile
+    networks:
+      - audio_network
     ports:
       - "${SERVICE_API_PORT}:${SERVICE_API_PORT}"
     depends_on:
@@ -72,6 +26,7 @@ services:
       SERVICE_API_HOST: ${SERVICE_API_HOST}
       SERVICE_API_PORT: ${SERVICE_API_PORT}
       SERVICE_TOKEN: ${SERVICE_TOKEN}
+      WHISPER_SERVICE_URL: ${WHISPER_SERVICE_URL}
 
       DEBUG: ${DEBUG}
       CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC: ${CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC}
@@ -87,11 +42,12 @@ services:
       STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
       STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
 
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SERVICE_API_PORT}", "--reload"]
-    #command: tail -f /dev/null
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # to connect to host ports
+    command: tail -f /dev/null
     volumes:
       - .:/usr/src/app
       - ../library:/usr/src/library
       - ${VOLUME_DATA_PATH}/audio:/audio
+
+networks:
+  audio_network:
+    name: audio_network

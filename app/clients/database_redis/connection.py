@@ -1,21 +1,36 @@
 """Redis connection."""
 from typing import Optional
+import logging
 
 from redis.asyncio.client import Redis
 from redis.exceptions import ConnectionError
 
 from app.clients.database_redis.exceptions import RedisConnectionError
 
+logger = logging.getLogger(__name__)
 
 async def get_redis_client(host: str, port: int, password: Optional[str] = None) -> Redis:
-    """ToDo."""
-    try:
-        # import redis.asyncio as aioredis
-        # redis_client = await aioredis.from_url(f"redis://{host}:{port}/0", decode_responses=True)
-        redis_client = Redis(host=host, port=port, password=password, decode_responses=True)
-        await redis_client.ping()
+    """Create Redis client connection with detailed logging."""
+    logger.info(f"Attempting Redis connection to {host}:{port}")
+    if password:
+        logger.info("Redis password is configured")
+    else:
+        logger.info("No Redis password configured")
 
-    except ConnectionError:
+    try:
+        logger.debug("Initializing Redis client")
+        redis_client = Redis(host=host, port=port, decode_responses=True)
+        
+        logger.debug("Attempting to ping Redis server")
+        await redis_client.ping()
+        logger.info("Successfully connected to Redis server")
+
+    except ConnectionError as e:
+        logger.error(f"Redis connection error: {str(e)}")
+        logger.error(f"Connection details - Host: {host}, Port: {port}")
         raise RedisConnectionError("Redis connection error. Check if the connection configuration is correct")
+    except Exception as e:
+        logger.error(f"Unexpected error during Redis connection: {str(e)}")
+        raise
 
     return redis_client
