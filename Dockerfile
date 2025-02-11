@@ -1,12 +1,12 @@
-FROM python:3.9
+FROM python:3.12
 
 WORKDIR /usr/src/app
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN python -m pip install --upgrade pip
 
-COPY  main_requirements.txt ./
+COPY  requirements.txt ./
 
-RUN pip install --no-cache-dir -r main_requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && apt-get install -y ffmpeg

@@ -10,7 +10,7 @@ from redis.asyncio.client import Redis
 from app.services.audio.audio import AudioSlicer
 from app.services.audio.redis import Meeting, Transcriber
 from app.services.transcription.matcher import SpeakerMeta, TranscriptSegment
-from processor import Processor  # Updated import path
+from audio.app.services.transcription.processor import Processor  # Updated import path
 
 
 @pytest.fixture

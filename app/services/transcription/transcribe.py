@@ -3,7 +3,7 @@ import logging
 
 from app.clients.database_redis.connection import get_redis_client
 from app.settings import settings
-from processor import Processor
+from audio.app.services.transcription.processor import Processor
 
 # Configure logging
 logging.basicConfig(

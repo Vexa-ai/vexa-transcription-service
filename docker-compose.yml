@@ -1,53 +1,62 @@
-name: dev_audio
+name: dev_audio_processing
 
 services:
+  # Shared Redis instance
   redis:
     image: redis:latest
     restart: unless-stopped
-    networks:
-      - audio_network
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
-      - ${VOLUME_DATA_PATH}/docker_redis_audio:/data
+      - ${VOLUME_DATA_PATH}/redis:/data
 
-  api:
+  # Audio Processing Service
+  
+  streamqueue:
+    #image: stream_api
+    build: .
     restart: unless-stopped
-    build: 
-      context: docker
-      dockerfile: MainDockerfile
-    networks:
-      - audio_network
     ports:
-      - "${SERVICE_API_PORT}:${SERVICE_API_PORT}"
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      - redis
+    command: tail -f /dev/null
+    environment:
+      - REDIS_HOST
+      - REDIS_PORT
+      - API_HOST
+      - API_PORT
+      - API_TOKEN
+      - AUDIO_CHUNK_DURATION_SEC
+      - REDIS_PASSWORD
+
+    volumes:
+      - ./streamqueue:/usr/src/app
+  
+  audio:
+    build: .
+    restart: unless-stopped
+
     depends_on:
       - redis
     environment:
-      SERVICE_VERSION: ${SERVICE_VERSION}
-      SERVICE_NAME: ${SERVICE_NAME}
-      SERVICE_API_HOST: ${SERVICE_API_HOST}
-      SERVICE_API_PORT: ${SERVICE_API_PORT}
-      SERVICE_TOKEN: ${SERVICE_TOKEN}
-      WHISPER_SERVICE_URL: ${WHISPER_SERVICE_URL}
+      - SERVICE_VERSION
+      - REDIS_HOST
+      - REDIS_PORT
+      - AUDIO_CHUNK_DURATION_SEC
+      - SEGMENT_SIZE_SEC
+      - PROCESSING_THREADS
+      - CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC
+      - SPEAKER_DELAY_SEC
+      - WHISPER_SERVICE_URL
+      - WHISPER_API_TOKEN
+      - RAW_AUDIO_PATH
+      - SEGMENTS_PATH
+      - REDIS_PASSWORD
 
-      DEBUG: ${DEBUG}
-      CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC: ${CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC}
-
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-
-      STREAM_QUEUE_SERVICE_LIST_CONNECTIONS: ${STREAM_QUEUE_SERVICE_LIST_CONNECTIONS}
-      STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS: ${STREAM_QUEUE_SERVICE_GET_NEXT_CHUNKS}
-      STREAM_QUEUE_SERVICE_HEALTH: ${STREAM_QUEUE_SERVICE_HEALTH}
-      STREAM_QUEUE_SERVICE_HEALTH_CHECK: ${STREAM_QUEUE_SERVICE_HEALTH_CHECK}
-      STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT: ${STREAM_QUEUE_SERVICE_REQUEST_TIMEOUT}
-      STREAM_QUEUE_SERVICE_AUTH_TOKEN: ${STREAM_QUEUE_SERVICE_AUTH_TOKEN}
-
-    command: tail -f /dev/null
     volumes:
-      - .:/usr/src/app
-      - ../library:/usr/src/library
-      - ${VOLUME_DATA_PATH}/audio:/audio
+      - ${VOLUME_DATA_PATH}:/data/audio
+      - ./app:/usr/src/app
 
 networks:
-  audio_network:
-    name: audio_network
+  default:
+    driver: bridge
