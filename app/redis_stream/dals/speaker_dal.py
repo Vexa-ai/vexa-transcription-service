@@ -1,0 +1,15 @@
+"""Module for basic work with Redis by speaker keys."""
+from typing import List
+
+from app.redis_transcribe.base import BaseDAL
+from app.redis_transcribe import keys
+
+
+class SpeakerDAL(BaseDAL):
+    """Class for basic work with Redis by speaker keys."""
+
+    async def add_speaker_data(self, speaker_data: str) -> None:
+        await self._redis_client.lpush(SPEAKER_DATA, speaker_data)
+
+    async def pop_chunks(self, limit: int = 1) -> List[dict]:
+        return await self.rpop_many(SPEAKER_DATA, limit, json_load=True)

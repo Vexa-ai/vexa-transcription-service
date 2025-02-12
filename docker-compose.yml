@@ -12,14 +12,18 @@ services:
   # Audio Processing Service
   
   streamqueue:
-    #image: stream_api
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./streamqueue:/usr/src/app/streamqueue
+   # command: python streamqueue/main.py
+    command: tail -f /dev/null
     restart: unless-stopped
     ports:
       - "${API_PORT}:${API_PORT}"
     depends_on:
       - redis
-    command: tail -f /dev/null
     environment:
       - REDIS_HOST
       - REDIS_PORT
@@ -29,11 +33,15 @@ services:
       - AUDIO_CHUNK_DURATION_SEC
       - REDIS_PASSWORD
 
-    volumes:
-      - ./streamqueue:/usr/src/app
-  
   audio:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ${VOLUME_DATA_PATH}:/data/audio
+      - ./app:/usr/src/app/app
+    #command: python app/main.py
+    command: tail -f /dev/null
     restart: unless-stopped
 
     depends_on:
@@ -52,10 +60,6 @@ services:
       - RAW_AUDIO_PATH
       - SEGMENTS_PATH
       - REDIS_PASSWORD
-
-    volumes:
-      - ${VOLUME_DATA_PATH}:/data/audio
-      - ./app:/usr/src/app
 
 networks:
   default:

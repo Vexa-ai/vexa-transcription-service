@@ -8,7 +8,7 @@ from dateutil import parser
 from dateutil.tz import UTC
 from redis.asyncio.client import Redis
 
-from app.clients.database_redis.keys import SEGMENTS_DIARIZE, SEGMENTS_TRANSCRIBE
+from app.redis_transcribe.keys  import SEGMENTS_DIARIZE, SEGMENTS_TRANSCRIBE
 
 logger = logging.getLogger(__name__)
 

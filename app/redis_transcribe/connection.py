@@ -5,7 +5,7 @@ import logging
 from redis.asyncio.client import Redis
 from redis.exceptions import ConnectionError
 
-from app.clients.database_redis.exceptions import RedisConnectionError
+from app.redis_transcribe.exceptions import RedisConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ async def get_redis_client(host: str, port: int, password: Optional[str] = None)
 
     try:
         logger.debug("Initializing Redis client")
-        redis_client = Redis(host=host, port=port, decode_responses=True)
+        redis_client = Redis(host=host, port=port, password=password, decode_responses=True)
         
         logger.debug("Attempting to ping Redis server")
         await redis_client.ping()
