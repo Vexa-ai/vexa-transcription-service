@@ -43,7 +43,8 @@ services:
     #command: python app/main.py
     command: tail -f /dev/null
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
     environment:

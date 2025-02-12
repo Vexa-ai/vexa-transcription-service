@@ -1,9 +1,9 @@
 import asyncio
 import logging
 
-from app.clients.database_redis.connection import get_redis_client
+from app.redis_transcribe.connection import get_redis_client
 from app.settings import settings
-from audio.app.services.transcription.processor import Processor
+from app.services.transcription.processor import Processor
 
 # Configure logging
 logging.basicConfig(
@@ -17,7 +17,7 @@ async def main():
     logger.info(f"Redis settings - Host: {settings.redis_host}, Port: {settings.redis_port}")
 
     try:
-        redis_client = await get_redis_client(settings.redis_host, settings.redis_port)
+        redis_client = await get_redis_client(settings.redis_host, settings.redis_port,settings.redis_password)
 
         processor = Processor(redis_client, logger)
         while True:

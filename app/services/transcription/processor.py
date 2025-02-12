@@ -11,7 +11,7 @@ from uuid import uuid4
 import pandas as pd
 from redis.asyncio.client import Redis
 
-from app.clients.database_redis import keys
+from app.redis_transcribe import keys
 from app.services.audio.audio import AudioFileCorruptedError, AudioSlicer
 from app.services.audio.redis_models import (
     Meeting,
@@ -43,8 +43,8 @@ async def get_next_chunk_start(diarization_result, length, shift):
 class Processor:
     redis_client: Redis
     logger: Any = field(default=logging.getLogger(__name__))
-    whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL", "https://transcribe.dev.vexa.ai"))
-    whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN", "default_token_change_me"))
+    whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
+    whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
 
     def __post_init__(self):
         self.processor = Transcriber(self.redis_client)
@@ -78,7 +78,7 @@ class Processor:
 
             seek = (self.seek_timestamp - self.connection.start_timestamp).total_seconds()
             self.logger.info(f"seek: {seek}")
-            path = f"/audio/{self.connection.id}.webm"
+            path = f"/data/audio/{self.connection.id}.webm"
 
             try:
                 audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, max_length)

@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     @property
     def redis_connection(self) -> str:
         """str: String to connect to Redis database."""
-        return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/2"
+        return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/0"
 
 
 # # Configure logging
