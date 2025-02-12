@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 
 from app.settings import settings
-from app.tasks.process_connections import ProcessConnectionTask
+from audio.app.tasks.parse_stream import ProcessConnectionTask
 
 logger = logging.getLogger(__name__)
 

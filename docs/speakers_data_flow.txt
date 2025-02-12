@@ -1,0 +1,94 @@
+Speaker Data Processing Flow
+
+1. Client Request
+   - Sends PUT to /extension/speakers
+   - Headers: 
+     * Authorization: Bearer <user_token>
+   - Body: JSON array of speaker data
+   - Parameters:
+     - connection_id: conn-123
+     - meeting_id: meet-456
+     - ts: 1719397023 (client timestamp)
+
+2. Authentication
+   - Same middleware flow as audio:
+     * Token → user_id mapping
+     * Redis DB 1 check
+
+3. Data Validation
+   - Expected format:
+     [
+       ["speaker_1", "0110101110"],  // [speaker_id, embedding]
+       ["speaker_2", "1110100110"]
+     ]
+   - Validation checks:
+     * Array must be non-empty
+     * Each entry must have 2 elements
+     * Both elements must be strings
+
+4. Redis Storage Operations
+   a. Speaker Data Storage
+      - Key: speaker_data
+      - Value (JSON):
+        {
+          "speakers": [
+            ["speaker_1", "0110101110"],
+            ["speaker_2", "1110100110"]
+          ],
+          "connection_id": "conn-123",
+          "meeting_id": "meet-456",
+          "user_id": "user_789",
+          "server_ts": 1719397023.123456
+        }
+      - Structure: List (LPUSH)
+
+   b. Connection Association
+      - Key: speaker_connections
+      - Field: conn-123
+      - Value: meet-456
+      - Structure: Hash (HSET)
+
+5. Response
+   - 201 Created with:
+     {
+       "message": "Speaker created"
+     }
+
+Key Data Structures
+
+1. Speaker Entry (JSON)
+   - speakers: array of [id, embedding] pairs
+   - connection_id: string
+   - meeting_id: string
+   - user_id: string (from token)
+   - server_ts: float (Unix timestamp)
+
+2. Speaker Connections (Hash)
+   - Key: speaker_connections
+   - Field structure: connection_id → meeting_id
+   - Used for tracking active speaker sessions
+
+3. Raw Speaker Data Format
+   [
+     ["s1", "1001111111"],  // Speaker 1
+     ["s2", "1011110100"],  // Speaker 2
+     ...
+   ]
+   - First element: Speaker identifier
+   - Second element: Binary embedding mask
+
+Processing Notes
+
+1. Temporal Relationship
+   - Speaker data is timestamped but not chunked
+   - Multiple updates per connection allowed
+   - Latest entry represents current speaker setup
+
+2. Embedding Storage
+   - Binary masks stored as strings
+   - Fixed-length encoding (exact length validated)
+   - Used for voice diarization later
+
+3. Connection Lifecycle
+   - Speaker data automatically expires with connection
+   - Tied to connection_id via speaker_connections hash

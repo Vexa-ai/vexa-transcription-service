@@ -40,8 +40,8 @@ class AudioChunkDAL(BaseDAL):
         chunks = await self.rpop_many(key, limit)
         return chunks
 
-    async def add_chunk(self, connection_id: str, chink_data: str) -> None:
-        await self._redis_client.lpush(f"{INITIAL_FEED_AUDIO}:{connection_id}", chink_data)
+    async def add_chunk(self, connection_id: str, chunk_data: str) -> None:
+        await self._redis_client.lpush(f"{INITIAL_FEED_AUDIO}:{connection_id}", chunk_data)
 
     async def set_timedelta(self, connection_id: str, timedelta: int) -> None:
         await self._redis_client.hset(AUDIO_TIMESTAMP_DELTA, connection_id, str(timedelta))

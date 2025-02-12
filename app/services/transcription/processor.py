@@ -13,7 +13,7 @@ from redis.asyncio.client import Redis
 
 from app.clients.database_redis import keys
 from app.services.audio.audio import AudioFileCorruptedError, AudioSlicer
-from app.services.audio.redis import (
+from app.services.audio.redis_models import (
     Meeting,
     Transcriber,
     Transcript,

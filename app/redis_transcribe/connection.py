@@ -9,7 +9,7 @@ from app.redis_transcribe.exceptions import RedisConnectionError
 
 logger = logging.getLogger(__name__)
 
-async def get_redis_client(host: str, port: int, password: Optional[str] = None) -> Redis:
+async def get_redis_client(host: str, port: int, password: Optional[str] = None, db: int = 0) -> Redis:
     """Create Redis client connection with detailed logging."""
     logger.info(f"Attempting Redis connection to {host}:{port}")
     if password:
@@ -19,7 +19,7 @@ async def get_redis_client(host: str, port: int, password: Optional[str] = None)
 
     try:
         logger.debug("Initializing Redis client")
-        redis_client = Redis(host=host, port=port, password=password, decode_responses=True)
+        redis_client = Redis(host=host, port=port, password=password, db=db, decode_responses=True)
         
         logger.debug("Attempting to ping Redis server")
         await redis_client.ping()

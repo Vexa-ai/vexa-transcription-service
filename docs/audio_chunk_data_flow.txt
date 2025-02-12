@@ -1,0 +1,80 @@
+Audio Chunk Processing Flow
+
+1. Client Request
+   - Sends POST to /extension/audio
+   - Headers: 
+     * Authorization: Bearer <user_token>
+   - Body: Raw audio bytes
+   - Parameters:
+     - i: 42 (chunk index)
+     - connection_id: conn-123
+     - meeting_id: meet-456
+     - ts: 1719397023 (client timestamp)
+
+2. Authentication
+   - Middleware extracts token from headers
+   - Redis Check (DB 1):
+     * Hash: token_user_map
+     * Key: <user_token> → Value: user_789
+   - Outcome: 
+     * Valid: Proceed with user_789
+     * Invalid: Return 401 Unauthorized
+
+3. Timestamp Handling
+   - Server generates: 2024-06-25T14:17:03.123456+00:00
+   - Calculates:
+     * timestamp_delta = server_ts - client_ts
+     Example: 0.123 seconds
+
+4. Redis Storage Operations
+   a. Audio Chunk Storage
+      - Key: initialFeed_audio:conn-123
+      - Value (JSON):
+        {
+          "data": "a2b3c4d5...",  # Hex encoded
+          "timestamp": 1719397023.123456,
+          "chunk_index": 42,
+          "meeting_id": "meet-456",
+          "user_id": "user_789"  # Implicit from token
+        }
+      - Structure: List (LPUSH)
+
+   b. Timing Data
+      - Key: audio_timestamp_delta
+      - Field: conn-123
+      - Value: 0.123
+      - Structure: Hash (HSET)
+
+   c. Connection Tracking
+      - Key: ConnectionTimestamp:conn-123
+      - Value: 1719397023123  # Server timestamp as integer
+      - Structure: List (LPUSH)
+
+5. Response
+   - 200 OK with:
+     {
+       "message": "Chunk received",
+       "connection_id": "conn-123"
+     }
+
+Key Data Structures
+
+1. Audio Chunk Entry (JSON)
+   - data: string (hex encoded audio bytes)
+   - timestamp: float (Unix timestamp with microseconds)
+   - chunk_index: int (sequential number)
+   - meeting_id: string
+   - (implied) user_id via token
+
+2. Timestamp Delta (Hash)
+   - Key: audio_timestamp_delta
+   - Field structure: connection_id → delta_seconds
+
+3. Connection Tracking (List)
+   - Values: integer timestamps in milliseconds
+   - Used for connection duration monitoring
+
+4. Token Mapping (Hash)
+   - Key: token_user_map
+   - Field structure: token → user_id
+   - Stored in Redis DB 1 (admin database)
