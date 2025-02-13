@@ -1,8 +1,8 @@
 """Module for basic work with Redis by audio-chunk keys."""
 from typing import List, Optional, Tuple
 
-from app.redis_transcribe.base import BaseDAL 
-from app.redis_stream.keys import AUDIO_TIMESTAMP_DELTA, INITIAL_FEED_AUDIO
+from redis_db.dals.base import BaseDAL
+from redis_db.keys import INITIAL_FEED_AUDIO
 
 
 class AudioChunkDAL(BaseDAL):
@@ -40,11 +40,5 @@ class AudioChunkDAL(BaseDAL):
         chunks = await self.rpop_many(key, limit)
         return chunks
 
-    async def add_chunk(self, connection_id: str, chunk_data: str) -> None:
-        await self._redis_client.lpush(f"{INITIAL_FEED_AUDIO}:{connection_id}", chunk_data)
-
-    async def set_timedelta(self, connection_id: str, timedelta: int) -> None:
-        await self._redis_client.hset(AUDIO_TIMESTAMP_DELTA, connection_id, str(timedelta))
-
-    async def get_timedelta(self, connection_id: str) -> Optional[str]:
-        return await self._redis_client.hget(AUDIO_TIMESTAMP_DELTA, connection_id)
+    async def add_chunk(self, connection_id: str, chunk: str) -> None:
+        await self._redis_client.lpush(f"{INITIAL_FEED_AUDIO}:{connection_id}", chunk)

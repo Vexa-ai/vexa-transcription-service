@@ -2,9 +2,9 @@
 import logging
 from typing import Optional
 
-from redis.dals.base import BaseDAL
-from redis.exceptions import UserTokenAlreadyExist
-from redis.keys import TOKEN_USER_MAP, USER_ENABLE_STATUS_MAP
+from redis_db.dals.base import BaseDAL
+from redis_db.exceptions import UserTokenAlreadyExist
+from redis_db.keys import TOKEN_USER_MAP, USER_ENABLE_STATUS_MAP
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
 """Module for basic work with Redis by speaker keys."""
 from typing import List
 
-from app.redis_transcribe.base import BaseDAL
-from app.redis_transcribe import keys
+from redis_db.dals.base import BaseDAL
+from redis_db.keys import SPEAKER_DATA
 
 
 class SpeakerDAL(BaseDAL):
