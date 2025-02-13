@@ -45,12 +45,13 @@ class Processor:
     logger: Any = field(default=logging.getLogger(__name__))
     whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
     whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
+    max_length: int = field(default=240)
 
     def __post_init__(self):
         self.processor = Transcriber(self.redis_client)
-        self.matcher = TranscriptSpeakerMatcher()
+        self.matcher = None  # Initialize as None, will be set after we have seek_timestamp
 
-    async def read(self, max_length=240):
+    async def read(self):
         meeting_id = await self.processor.pop_inprogress()
 
         if not meeting_id:
@@ -62,6 +63,9 @@ class Processor:
 
         await self.meeting.load_from_redis()
         self.seek_timestamp = self.meeting.transcriber_seek_timestamp
+        
+        # Initialize matcher with seek_timestamp
+        self.matcher = TranscriptSpeakerMatcher(self.seek_timestamp)
 
         self.logger.info(f"seek_timestamp: {self.seek_timestamp}")
         current_time = datetime.now(timezone.utc)
@@ -81,7 +85,7 @@ class Processor:
             path = f"/data/audio/{self.connection.id}.webm"
 
             try:
-                audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, max_length)
+                audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, self.max_length)
                 self.slice_duration = audio_slicer.audio.duration_seconds
                 self.audio_data = await audio_slicer.export_data()
                 return True
@@ -92,7 +96,7 @@ class Processor:
                 return
 
             except Exception:
-                self.logger.error(f"could nod read file {path} at seek {seek} with length {max_length}")
+                self.logger.error(f"could nod read file {path} at seek {seek} with length {self.max_length}")
                 await self.meeting.delete_connection(self.connection.id)
                 return
 
@@ -109,39 +113,35 @@ class Processor:
                         return
                     
                     result = await response.json()
-                    text = result["transcription"]
-
-                    # Since we don't get word timestamps from the service, we'll create a single segment
-                    transcript_segments = [
-                        TranscriptSegment(
-                            content=text,
-                            start_timestamp=self.seek_timestamp,
-                            end_timestamp=self.seek_timestamp + pd.Timedelta(seconds=self.slice_duration)
-                        )
-                    ]
-
-                    # Get speaker activities
-                    speaker_activities = await self._get_speaker_activities()
-
+                    
+                    # Convert whisper segments to TranscriptSegment objects
+                    transcription_data = [TranscriptSegment.from_whisper_segment(segment) for segment in result['segments']]
+                    
+                    # Get speaker data from Redis
+                    speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
+                    speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
+                    
                     # Match speakers to segments
-                    matched_segments = self.matcher.match_segments(transcript_segments, speaker_activities)
+                    matched_segments = self.matcher.match(speaker_data, transcription_data)
 
-                    # Prepare for storage
+                    # Prepare segments for storage
                     result = []
                     for segment in matched_segments:
                         result.append({
-                            "text": segment.content,
-                            "start": segment.start_timestamp.isoformat(),
-                            "end": segment.end_timestamp.isoformat(),
+                            "content": segment.content,
+                            "start_timestamp": segment.start_timestamp,
+                            "end_timestamp": segment.end_timestamp,
                             "speaker": segment.speaker,
-                            "confidence": segment.confidence
+                            "confidence": segment.confidence,
+                            "segment_id": segment.segment_id,
+                            "words": segment.words
                         })
 
                     if result:
                         transcription = Transcript(
                             self.meeting.meeting_id,
                             self.redis_client,
-                            (result, self.meeting.transcriber_seek_timestamp.isoformat(), self.connection.id),
+                            result  # Store the full segment data
                         )
                         await transcription.lpush()
                         self.logger.info("pushed")
@@ -150,28 +150,9 @@ class Processor:
                         self.done = False
 
         except Exception as e:
-            self.logger.error(f"Error calling whisper service: {str(e)}")
+            self.logger.error(f"Error in transcription process: {str(e)}")
             self.done = False
 
-    async def _get_speaker_activities(self) -> List[SpeakerMeta]:
-        """Get speaker activities from the current meeting."""
-        # Get raw speaker data from Redis
-        raw_data = await self.redis_client.lrange(f"{self.meeting.meeting_id}:speakers", start=0, end=-1)
-        speaker_activities = []
-
-        for data in raw_data:
-            speaker_data = json.loads(data)
-            # Calculate normalized mic level from meta
-            mic_level = sum(int(n) for n in speaker_data.get("meta", [])) / 100.0  # Normalize to 0-1
-            
-            speaker_activities.append(SpeakerMeta(
-                name=speaker_data["speaker_name"],
-                mic_level=min(mic_level, 1.0),  # Cap at 1.0
-                timestamp=datetime.fromisoformat(speaker_data["timestamp"].rstrip("Z")),
-                delay_sec=float(speaker_data.get("speaker_delay_sec", 0.0))
-            ))
-
-        return speaker_activities
 
     async def find_next_seek(self, overlap=0):
         if self.done:
@@ -188,6 +169,11 @@ class Processor:
         await self.meeting.update_redis()
 
     async def do_finally(self):
-        if self.meeting:
-            await self.processor.remove(self.meeting.meeting_id)
+
+            if self.slice_duration/self.max_length > 0.9:
+                await self.processor.add_todo(self.meeting.meeting_id)
+                print("added to todo")
+            else:
+                await self.processor.remove(self.meeting.meeting_id)
+                print("removed from in_progress")
             await self.meeting.update_redis()

@@ -7,6 +7,7 @@ from typing import List, Literal, Optional, Union
 from dateutil import parser
 from dateutil.tz import UTC
 from redis.asyncio.client import Redis
+import pandas as pd
 
 from app.redis_transcribe.keys  import SEGMENTS_TRANSCRIBE
 
@@ -38,6 +39,67 @@ class Data:
 class Transcript(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
         super().__init__(key=f"{SEGMENTS_TRANSCRIBE}:{meeting_id}", redis_client=redis_client, data=data)
+
+    @classmethod
+    async def get_all_transcripts(cls, redis_client: Redis) -> List[dict]:
+        """Get all transcripts from Redis regardless of meeting ID."""
+        keys = await redis_client.keys(f"{SEGMENTS_TRANSCRIBE}:*")
+        all_transcripts = []
+        
+        for key in keys:
+            transcript_data = await redis_client.lrange(key, 0, -1)
+            for data in transcript_data:
+                try:
+                    transcript = json.loads(data)
+                    meeting_id = key.split(":")[-1]
+                    if isinstance(transcript, list):
+                        for segment in transcript:
+                            segment['meeting_id'] = meeting_id
+                            all_transcripts.append(segment)
+                    else:
+                        transcript['meeting_id'] = meeting_id
+                        all_transcripts.append(transcript)
+                except json.JSONDecodeError:
+                    logger.warning(f"Could not decode transcript data from key {key}")
+                    continue
+                
+        return all_transcripts
+
+    @classmethod
+    async def get_all_transcripts_df(cls, redis_client: Redis) -> 'pd.DataFrame':
+        """Get all transcripts from Redis as a pandas DataFrame.
+        
+        Args:
+            redis_client: Redis client instance
+            
+        Returns:
+            pandas DataFrame with columns:
+                - content: transcript text
+                - start_timestamp: start time
+                - end_timestamp: end time
+                - speaker: speaker name
+                - confidence: confidence score
+                - segment_id: unique segment identifier
+                - meeting_id: meeting identifier
+                - words: word-level data if available
+        """
+        transcripts = await cls.get_all_transcripts(redis_client)
+        if not transcripts:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(transcripts)
+        
+        # Convert timestamps to datetime if they exist
+        if 'start_timestamp' in df.columns:
+            df['start_timestamp'] = pd.to_datetime(df['start_timestamp'], format='mixed')
+        if 'end_timestamp' in df.columns:
+            df['end_timestamp'] = pd.to_datetime(df['end_timestamp'], format='mixed')
+            
+        # Sort by meeting_id and start_timestamp if available
+        if 'start_timestamp' in df.columns:
+            df = df.sort_values(['meeting_id', 'start_timestamp'])
+            
+        return df
 
 
 class Connection:
