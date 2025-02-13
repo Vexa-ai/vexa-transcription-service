@@ -2,7 +2,7 @@
 from typing import Optional, Union
 
 from redis.asyncio.client import Redis
-from redis_db.exceptions import RedisConnectionError
+from app.redis_stream.exceptions import RedisConnectionError    
 from redis.exceptions import ConnectionError
 
 async def get_redis_client(host: str, port: int, password: Optional[str] = None, db: Union[str, int] = 0) -> Redis: #database 0 will be for streamqueue
