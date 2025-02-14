@@ -53,9 +53,9 @@ class Processor:
         self.slice_duration = 0  # Initialize slice_duration
 
     async def read(self):
-        self.logger.info("start read")
+       # self.logger.info("start read")
         meeting_id = await self.processor.pop_inprogress()
-        self.logger.info(f"meeting_id: {meeting_id}")
+      #  self.logger.info(f"meeting_id: {meeting_id}")
 
         if not meeting_id:
             self.meeting = None
