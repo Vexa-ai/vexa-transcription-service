@@ -19,12 +19,12 @@ async def main():
     try:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port,settings.redis_password)
 
-        processor = Processor(redis_client, logger)
+        processor = Processor(redis_client, logger,max_length=60)
         while True:
             try:
-                ok = await processor.read(max_length=240)
+                ok = await processor.read()
                 if ok:
-                    await processor.transcribe()  # Removed unnecessary None parameter
+                    await processor.transcribe()
                     await processor.find_next_seek()
             except Exception as ex:
                 logger.error(f"Error in transcription loop: {ex}")

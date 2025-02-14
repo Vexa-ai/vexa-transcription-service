@@ -45,14 +45,17 @@ class Processor:
     logger: Any = field(default=logging.getLogger(__name__))
     whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
     whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
-    max_length: int = field(default=240)
+    max_length: int = field(default=30)
 
     def __post_init__(self):
         self.processor = Transcriber(self.redis_client)
         self.matcher = None  # Initialize as None, will be set after we have seek_timestamp
+        self.slice_duration = 0  # Initialize slice_duration
 
     async def read(self):
+        self.logger.info("start read")
         meeting_id = await self.processor.pop_inprogress()
+        self.logger.info(f"meeting_id: {meeting_id}")
 
         if not meeting_id:
             self.meeting = None
@@ -85,9 +88,9 @@ class Processor:
             path = f"/data/audio/{self.connection.id}.webm"
 
             try:
-                audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, self.max_length)
-                self.slice_duration = audio_slicer.audio.duration_seconds
-                self.audio_data = await audio_slicer.export_data()
+                self.audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, self.max_length)
+                self.slice_duration = self.audio_slicer.audio.duration_seconds
+                self.audio_data = await self.audio_slicer.export_data()
                 return True
 
             except AudioFileCorruptedError:
@@ -169,11 +172,14 @@ class Processor:
         await self.meeting.update_redis()
 
     async def do_finally(self):
-
-            if self.slice_duration/self.max_length > 0.9:
-                await self.processor.add_todo(self.meeting.meeting_id)
-                print("added to todo")
-            else:
-                await self.processor.remove(self.meeting.meeting_id)
-                print("removed from in_progress")
-            await self.meeting.update_redis()
+        # Only proceed with cleanup if we have a meeting
+        if not hasattr(self, 'meeting') or self.meeting is None:
+            return
+            
+        if self.slice_duration/self.max_length > 0.9:
+            await self.processor.add_todo(self.meeting.meeting_id)
+            print("added to todo")
+        else:
+            await self.processor.remove(self.meeting.meeting_id)
+            print("removed from in_progress")
+        await self.meeting.update_redis()
