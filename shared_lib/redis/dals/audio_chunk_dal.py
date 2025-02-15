@@ -1,8 +1,8 @@
 """Module for basic work with Redis by audio-chunk keys."""
 from typing import List, Optional, Tuple
 
-from app.redis_stream.dals.base import BaseDAL
-from app.redis_stream.keys import INITIAL_FEED_AUDIO
+from shared_lib.redis.dals.base import BaseDAL
+from shared_lib.redis.keys import INITIAL_FEED_AUDIO
 
 
 class AudioChunkDAL(BaseDAL):

@@ -3,8 +3,8 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from api.api import router
-from settings import settings
+from streamqueue.api.api import router
+from streamqueue.settings import settings
 
 def create_app() -> FastAPI:
     app = FastAPI(

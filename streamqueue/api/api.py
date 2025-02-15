@@ -1,11 +1,11 @@
 """Contains endpoints for StreamingQueue-service."""
 from fastapi import APIRouter, Depends
 
-from api.auth.service_token import ServiceTokenAuth
-from api.auth.user_token import UserTokenAuth
-from api.routers.extension import router as extension_router
-from api.routers.tools import router as tools_router
-from api.routers.user import router as user_router
+from streamqueue.api.auth.service_token import ServiceTokenAuth
+from streamqueue.api.auth.user_token import UserTokenAuth
+from streamqueue.api.routers.extension import router as extension_router
+from streamqueue.api.routers.tools import router as tools_router
+from streamqueue.api.routers.user import router as user_router
 
 router = APIRouter()
 

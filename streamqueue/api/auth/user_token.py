@@ -4,9 +4,9 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPBearer
 
-from redis_db.shared_lib..connection import get_redis_client
-from redis_db.shared_lib..dals.admin_dal import AdminDAL
-from settings import settings
+from shared_lib.redis.connection import get_redis_client
+from shared_lib.redis.dals.admin_dal import AdminDAL
+from streamqueue.settings import settings
 
 
 class UserTokenAuth(HTTPBearer):

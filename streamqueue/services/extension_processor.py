@@ -9,10 +9,10 @@ from dateutil import parser
 from dateutil.tz import UTC
 from redis.asyncio import Redis
 
-from redis_db.shared_lib..dals.audio_chunk_dal import AudioChunkDAL
+from shared_lib.redis.dals.audio_chunk_dal import AudioChunkDAL
 
-from redis_db.shared_lib..dals.speaker_dal import SpeakerDAL
-from settings import settings
+from shared_lib.redis.dals.speaker_dal import SpeakerDAL
+from streamqueue.settings import settings
 
 logger = logging.getLogger(__name__)
 

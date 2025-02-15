@@ -3,9 +3,9 @@ from typing import List
 from fastapi import APIRouter
 
 from api.schemas import UserResponse, UserSetEnableStatus, UserTokenCreate
-from redis_db.shared_lib..connection import get_redis_client
-from redis_db.shared_lib..dals.admin_dal import AdminDAL
-from settings import settings
+from shared_lib.redis.connection import get_redis_client
+from shared_lib.redis.dals.admin_dal import AdminDAL
+from streamqueue.settings import settings
 
 router = APIRouter(prefix="/users", tags=["users"])
 

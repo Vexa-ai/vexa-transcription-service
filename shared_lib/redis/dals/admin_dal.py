@@ -2,9 +2,9 @@
 import logging
 from typing import Optional
 
-from app.redis_stream.dals.base import BaseDAL
-from app.redis_stream.exceptions import UserTokenAlreadyExist
-from app.redis_stream.keys import TOKEN_USER_MAP, USER_ENABLE_STATUS_MAP
+from shared_lib.redis.dals.base import BaseDAL
+from shared_lib.redis.exceptions import UserTokenAlreadyExist
+from shared_lib.redis.keys import TOKEN_USER_MAP, USER_ENABLE_STATUS_MAP
 
 logger = logging.getLogger(__name__)
 

@@ -3,11 +3,11 @@ from typing import List
 from fastapi import APIRouter
 
 from api.schemas import AudioChunkInfo, SpeakerInfo, AddTokenRequest
-from redis_db.shared_lib..connection import get_redis_client
-from redis_db.shared_lib..dals.audio_chunk_dal import AudioChunkDAL
-from redis_db.shared_lib..dals.speaker_dal import SpeakerDAL
-from redis_db.shared_lib..dals.admin_dal import AdminDAL
-from settings import settings
+from shared_lib.redis.connection import get_redis_client
+from shared_lib.redis.dals.audio_chunk_dal import AudioChunkDAL
+from shared_lib.redis.dals.speaker_dal import SpeakerDAL
+from shared_lib.redis.dals.admin_dal import AdminDAL
+from streamqueue.settings import settings
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 

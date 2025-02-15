@@ -11,9 +11,9 @@ from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
 from api.schemas import TokenValidationResult
 from api.schemas.extension import SourceType
-from redis_db.shared_lib..connection import get_redis_client
+from shared_lib.redis.connection import get_redis_client
 from services.extension_processor import ExtensionProcessor
-from settings import settings
+from streamqueue.settings import settings
 
 logger = logging.getLogger("app")
 router = APIRouter(prefix="/extension", tags=["extension"])

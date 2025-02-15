@@ -17,6 +17,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./streamqueue:/usr/src/app/streamqueue
+      - ./shared_lib:/usr/src/app/shared_lib
    # command: python streamqueue/main.py
     command: tail -f /dev/null
     restart: unless-stopped
@@ -32,7 +33,9 @@ services:
       - API_TOKEN
       - AUDIO_CHUNK_DURATION_SEC
       - REDIS_PASSWORD
+      - PYTHONPATH=/app/streamqueue:/app/shared_lib
 
+      
   audio:
     build:
       context: .
@@ -40,6 +43,7 @@ services:
     volumes:
       - ${VOLUME_DATA_PATH}:/data/audio
       - ./app:/usr/src/app/app
+      - ./shared_lib:/usr/src/app/shared_lib
     #command: python app/main.py
     command: tail -f /dev/null
     restart: unless-stopped
@@ -61,6 +65,7 @@ services:
       - RAW_AUDIO_PATH
       - SEGMENTS_PATH
       - REDIS_PASSWORD
+      - PYTHONPATH=/app/streamqueue:/app/shared_lib
 
 networks:
   default:

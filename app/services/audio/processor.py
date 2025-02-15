@@ -1,5 +1,5 @@
 from app.redis_transcribe.connection import get_redis_client
-from app.redis_stream.dals.audio_chunk_dal import AudioChunkDAL
+from shared_lib.redis.dals.audio_chunk_dal import AudioChunkDAL
 
 import logging
 from datetime import datetime, timedelta, timezone

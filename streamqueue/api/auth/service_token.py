@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from fastapi.security import HTTPBearer
 
-from settings import settings
+from streamqueue.settings import settings
 
 
 class ServiceTokenAuth(HTTPBearer):
