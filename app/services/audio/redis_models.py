@@ -10,6 +10,7 @@ from redis.asyncio.client import Redis
 import pandas as pd
 
 from app.redis_transcribe.keys  import SEGMENTS_TRANSCRIBE
+from shared_lib.redis.models import TranscriptSegmentModel
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class Data:
     data: Union[List, dict] = None
 
     async def lpush(self):
-        data = json.dumps(self.data)
+        data = json.dumps(self.data, default=str)
         await self.redis_client.lpush(self.key, data)
 
     async def rpop(self):
@@ -48,19 +49,49 @@ class Transcript(Data):
         
         for key in keys:
             transcript_data = await redis_client.lrange(key, 0, -1)
+            meeting_id = key.split(":")[-1]  # Extract meeting_id from the key
             for data in transcript_data:
                 try:
                     transcript = json.loads(data)
-                    meeting_id = key.split(":")[-1]
                     if isinstance(transcript, list):
                         for segment in transcript:
+                            # Skip segments with invalid IDs
+                            if 'segment_id' not in segment or segment['segment_id'] is None:
+                                logger.warning(f"Skipping segment in meeting {meeting_id} due to missing segment_id")
+                                continue
+                            
+                            # Transform words format if needed
+                            if 'words' in segment and isinstance(segment['words'], list):
+                                segment['words'] = [
+                                    [word.get('word'), word.get('start'), word.get('end')]
+                                    if isinstance(word, dict) else word
+                                    for word in segment['words']
+                                ]
+                            
                             segment['meeting_id'] = meeting_id
-                            all_transcripts.append(segment)
+                            validated_segment = TranscriptSegmentModel(**segment)
+                            all_transcripts.append(validated_segment.model_dump())
                     else:
+                        # Handle single segment format
+                        if 'segment_id' not in transcript or transcript['segment_id'] is None:
+                            logger.warning(f"Skipping segment in meeting {meeting_id} due to missing segment_id")
+                            continue
+                        
+                        if 'words' in transcript and isinstance(transcript['words'], list):
+                            transcript['words'] = [
+                                [word.get('word'), word.get('start'), word.get('end')]
+                                if isinstance(word, dict) else word
+                                for word in transcript['words']
+                            ]
+                        
                         transcript['meeting_id'] = meeting_id
-                        all_transcripts.append(transcript)
+                        validated_segment = TranscriptSegmentModel(**transcript)
+                        all_transcripts.append(validated_segment.model_dump())
                 except json.JSONDecodeError:
                     logger.warning(f"Could not decode transcript data from key {key}")
+                    continue
+                except ValueError as e:
+                    logger.warning(f"Invalid transcript data format for key {key}: {e}")
                     continue
                 
         return all_transcripts
@@ -82,6 +113,7 @@ class Transcript(Data):
                 - segment_id: unique segment identifier
                 - meeting_id: meeting identifier
                 - words: word-level data if available
+                - start_server_timestamp: server-side timestamp
         """
         transcripts = await cls.get_all_transcripts(redis_client)
         if not transcripts:
@@ -89,13 +121,7 @@ class Transcript(Data):
             
         df = pd.DataFrame(transcripts)
         
-        # Convert timestamps to datetime if they exist
-        if 'start_timestamp' in df.columns:
-            df['start_timestamp'] = pd.to_datetime(df['start_timestamp'], format='mixed')
-        if 'end_timestamp' in df.columns:
-            df['end_timestamp'] = pd.to_datetime(df['end_timestamp'], format='mixed')
-            
-        # Sort by meeting_id and start_timestamp if available
+        # Sort by meeting_id and start_timestamp
         if 'start_timestamp' in df.columns:
             df = df.sort_values(['meeting_id', 'start_timestamp'])
             
@@ -145,6 +171,7 @@ class Meeting:
         self.metadata_type_ = f"meeting:{meeting_id}:metadata"
         self.connections_type_ = f"meeting:{meeting_id}:connections"
 
+        self.start_server_timestamp: Optional[datetime] = None
         self.start_timestamp: Optional[datetime] = None
         self.diarizer_seek_timestamp: Optional[datetime] = None
         self.transcriber_seek_timestamp: Optional[datetime] = None
@@ -152,10 +179,9 @@ class Meeting:
         self.diarizer_last_updated_timestamp: Optional[datetime] = None
         self.timestamps = [
             "start_timestamp",
-            "diarizer_seek_timestamp",
+            "start_server_timestamp",
             "transcriber_seek_timestamp",
             "transcriber_last_updated_timestamp",
-            "diarizer_last_updated_timestamp",
         ]
 
     async def _update_field(self, field_name: str, value: Optional[datetime]):
@@ -199,6 +225,12 @@ class Meeting:
         self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
 
         await self.update_redis()
+        
+    async def set_start_server_timestamp(self, start_server_timestamp):
+        await self.load_from_redis()
+        self.start_server_timestamp = start_server_timestamp if self.start_server_timestamp is None else self.start_server_timestamp
+
+        await self.update_redis()
 
     async def update_diarizer_timestamp(self, segment_start_timestamp, diarizer_last_updated_timestamp):
         await self.load_from_redis()
@@ -208,9 +240,9 @@ class Meeting:
         )
         await self.update_redis()
 
-    async def update_transcriber_timestamp(self, segment_start_timestamp, transcriber_last_updated_timestamp):
+    async def update_transcriber_timestamp(self, segment_start_user_timestamp, transcriber_last_updated_timestamp):
         await self.load_from_redis()
-        self.start_timestamp = segment_start_timestamp if self.start_timestamp is None else self.start_timestamp
+        self.start_timestamp = segment_start_user_timestamp if self.start_timestamp is None else self.start_timestamp
         self.transcriber_last_updated_timestamp = (
             transcriber_last_updated_timestamp if transcriber_last_updated_timestamp else None
         )

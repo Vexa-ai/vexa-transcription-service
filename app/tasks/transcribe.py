@@ -13,8 +13,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def main():
-    logger.info("Starting transcription process")
-    logger.info(f"Redis settings - Host: {settings.redis_host}, Port: {settings.redis_port}")
+    # logger.info("Starting transcription process")
+    # logger.info(f"Redis settings - Host: {settings.redis_host}, Port: {settings.redis_port}")
 
     try:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port,settings.redis_password)

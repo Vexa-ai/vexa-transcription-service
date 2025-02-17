@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 
 from shared_lib.redis.dals.base import BaseDAL
 from shared_lib.redis.keys import INITIAL_FEED_AUDIO
+from shared_lib.redis.models import AudioChunkModel
 
 
 class AudioChunkDAL(BaseDAL):
@@ -40,5 +41,10 @@ class AudioChunkDAL(BaseDAL):
         chunks = await self.rpop_many(key, limit)
         return chunks
 
-    async def add_chunk(self, connection_id: str, chunk: str) -> None:
-        await self._redis_client.lpush(f"{INITIAL_FEED_AUDIO}:{connection_id}", chunk)
+    async def add_chunk(self, connection_id: str, chunk_data: dict) -> None:
+        # Validate the data
+        chunk_model = AudioChunkModel(**chunk_data)
+        await self._redis_client.lpush(
+            f"{INITIAL_FEED_AUDIO}:{connection_id}", 
+            chunk_model.model_dump_json()
+        )

@@ -11,6 +11,8 @@ from redis.asyncio.client import Redis
 from app.services.audio.redis_models import Connection, Meeting, Transcriber
 from app.settings import settings
 
+from shared_lib.redis.models import AudioChunkModel, SpeakerDataModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,46 +43,54 @@ class Processor:
     async def _process_connection_task(
         self,
         connection_id,
-        transcriber_step: int = 10,
+        transcriber_step: int = 1,
     ) -> None:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-        meeting_id, segment_start_timestamp, segment_end_timestamp, user_id = await self.writestream2file(connection_id)
+        meeting_id, segment_start_user_timestamp, segment_end_user_timestamp, segment_start_server_timestamp, user_id = await self.writestream2file(connection_id)
 
         # If we didn't get valid data from writestream2file, skip processing
-        if None in (meeting_id, segment_start_timestamp, segment_end_timestamp, user_id):
+        if None in (meeting_id, segment_start_user_timestamp, segment_end_user_timestamp, segment_start_server_timestamp, user_id):
             logger.warning(f"Skipping processing for connection {connection_id} due to missing data")
             return
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(timezone.utc) #TODO: consider using transcriber_last_updated_timestamp + step and rename to update_time
 
         connection = Connection(redis_client, connection_id, user_id)
-        await connection.update_timestamps(segment_start_timestamp, segment_end_timestamp)
+        await connection.update_timestamps(segment_start_user_timestamp, segment_end_user_timestamp)
 
         meeting = Meeting(redis_client, meeting_id)
 
         await meeting.load_from_redis()
         await meeting.add_connection(connection.id)
-        await meeting.set_start_timestamp(segment_start_timestamp)
-
+        await meeting.set_start_timestamp(segment_start_user_timestamp)
+        await meeting.set_start_server_timestamp(segment_start_server_timestamp)
+        
         meeting.transcriber_last_updated_timestamp = (
-            meeting.transcriber_last_updated_timestamp or segment_start_timestamp
+            meeting.transcriber_last_updated_timestamp or segment_start_user_timestamp
         )
 
+        time_since_last_update = (current_time - meeting.transcriber_last_updated_timestamp).seconds
+        logger.info(f"Time since last transcriber update: {time_since_last_update} seconds")
+        logger.info(f"Current transcriber step threshold: {transcriber_step} seconds")
+        logger.info(f"Last transcriber update timestamp: {meeting.transcriber_last_updated_timestamp}")
 
-        if (current_time - meeting.transcriber_last_updated_timestamp).seconds > transcriber_step:
-            logger.info("transcriber added")
+        if time_since_last_update > transcriber_step:
+            logger.info(f"Adding transcriber - time threshold exceeded ({time_since_last_update} > {transcriber_step} seconds)")
             transcriber = Transcriber(redis_client)
             await transcriber.add_todo(meeting.meeting_id)
             await meeting.update_transcriber_timestamp(
-                segment_start_timestamp, transcriber_last_updated_timestamp=current_time
+                segment_start_user_timestamp, transcriber_last_updated_timestamp=current_time 
             )
+        else:
+            logger.info(f"Skipping transcriber addition - time threshold not met ({time_since_last_update} <= {transcriber_step} seconds)")
 
         await meeting.update_redis()
 
     async def writestream2file(self, connection_id):
         logger.info(f"Writing stream to file for connection {connection_id}")
         path = f"/data/audio/{connection_id}.webm"
-        first_timestamp = None
+        first_user_timestamp = None
+        first_server_timestamp = None
         
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
         audio_chunk_dal = AudioChunkDAL(redis_client)
@@ -89,47 +99,46 @@ class Processor:
         if chunks:
             meeting_id = connection_id  # default if no meeting_id in data
             
-            # Check if file exists - if not, ensure first chunk has index 0
-            if not os.path.exists(path):
-                first_chunk = chunks[0]
-                logger.info(f"First chunk data for new file {connection_id}: {first_chunk}")
-                if 'audio_chunk_number' not in first_chunk:
-                    logger.warning(f"audio_chunk_number field missing in first chunk for connection {connection_id}")
-                    return None, None, None, None
-                if first_chunk['audio_chunk_number'] != 0:
-                    logger.warning(f"First chunk index is {first_chunk['audio_chunk_number']} instead of 0 for connection {connection_id}")
-                    return None, None, None, None
+            # # Check if file exists - if not, ensure first chunk has index 0
+          #  # if not os.path.exists(path):
+            #     try:
+            #         first_chunk = AudioChunkModel(**chunks[0])
+            #     except ValueError as e:
+            #         logger.error(f"Invalid first chunk data for connection {connection_id}: {e}")
+            #         return None, None, None, None
+                
+            #     if first_chunk.audio_chunk_number != 0:
+            #         logger.warning(f"First chunk index is {first_chunk.audio_chunk_number} instead of 0 for connection {connection_id}")
+            #         return None, None, None, None
 
             for chunk_data in chunks:
-                chunk = bytes.fromhex(chunk_data['chunk'])
-                first_timestamp: datetime = (
-                    datetime.fromisoformat(chunk_data['timestamp'].rstrip("Z")).astimezone(timezone.utc)
-                    - timedelta(seconds=chunk_data['audio_chunk_duration_sec'])
-                    if not first_timestamp
-                    else first_timestamp
+                try:
+                    chunk_obj = AudioChunkModel(**chunk_data)
+                except ValueError as e:
+                    logger.error(f"Invalid chunk data for connection {connection_id}: {e}")
+                    continue
+
+                raw_chunk = bytes.fromhex(chunk_obj.chunk)
+                first_user_timestamp = (
+                    datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
+                    - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
+                    if not first_user_timestamp
+                    else first_user_timestamp
                 )
-
-                # Open the file in append mode
+                
+                first_server_timestamp = (
+                    datetime.fromisoformat(chunk_obj.server_timestamp.rstrip("Z")).astimezone(timezone.utc)
+                    - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
+                    if not first_server_timestamp
+                    else first_server_timestamp
+                )
+                
                 with open(path, "ab") as file:
-                    file.write(chunk)
+                    file.write(raw_chunk)
 
-                last_timestamp = datetime.fromisoformat(chunk_data['timestamp'].rstrip("Z")).astimezone(timezone.utc)
-                meeting_id = chunk_data['meeting_id']
-                user_id = chunk_data['user_id']
+                last_user_timestamp = datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
+                
+                meeting_id = chunk_obj.meeting_id or connection_id
+                user_id = str(chunk_obj.user_id)
 
-            return meeting_id, first_timestamp, last_timestamp, user_id
-
-    @staticmethod
-    async def __save_timestamps(
-        redis_client: Redis,
-        connection_id: str,
-        segment_start_timestamp: datetime,
-        segment_end_timestamp: datetime,
-    ):
-        connection = ConnectionDAL(redis_client)
-        start_timestamp, end_timestamp = await connection.get_connection_data(connection_id)
-        if start_timestamp is None:
-            await connection.set_start_timestamp(connection_id, segment_start_timestamp)
-
-        if end_timestamp is None:
-            await connection.set_end_timestamp(connection_id, segment_end_timestamp)
+            return meeting_id, first_user_timestamp, last_user_timestamp, first_server_timestamp, user_id

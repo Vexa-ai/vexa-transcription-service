@@ -62,7 +62,7 @@ class Processor:
             return
 
         self.meeting = Meeting(self.redis_client, meeting_id)
-        self.logger.info(f"Meeting ID: {meeting_id}")
+
 
         await self.meeting.load_from_redis()
         self.seek_timestamp = self.meeting.transcriber_seek_timestamp
@@ -75,7 +75,7 @@ class Processor:
 
         self.connections = await self.meeting.get_connections()
         self.logger.info(f"number of connections: {len(self.connections)}")
-        self.connection = best_covering_connection(self.seek_timestamp, current_time, self.connections)
+        self.connection = best_covering_connection(self.seek_timestamp, current_time, self.connections) #should not be current time but instead end seek, which is last seek + accumulated step (so that we add step to accumulated if no overlapping connection)
 
         if self.connection:
             self.logger.info(f"Connection ID: {self.connection.id}")
@@ -104,57 +104,70 @@ class Processor:
                 return
 
     async def transcribe(self):
-        try:
-            headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.whisper_service_url, data=self.audio_data, headers=headers) as response:
-                    if response.status != 200:
-                        self.logger.error(f"Whisper service error: {response.status}")
-                        if response.status == 401:
-                            self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
-                        self.done = False
-                        return
-                    
-                    result = await response.json()
-                    
-                    # Convert whisper segments to TranscriptSegment objects
-                    transcription_data = [TranscriptSegment.from_whisper_segment(segment) for segment in result['segments']]
-                    
-                    # Get speaker data from Redis
-                    speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
-                    speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
-                    
-                    # Match speakers to segments
-                    matched_segments = self.matcher.match(speaker_data, transcription_data)
+        # try:
+        headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.whisper_service_url, data=self.audio_data, headers=headers) as response:
+                if response.status != 200:
+                    self.logger.error(f"Whisper service error: {response.status}")
+                    if response.status == 401:
+                        self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
+                    self.done = False
+                    return
+                
+                result = await response.json()
+                
+                # Log the structure of the response
 
-                    # Prepare segments for storage
-                    result = []
-                    for segment in matched_segments:
-                        result.append({
-                            "content": segment.content,
-                            "start_timestamp": segment.start_timestamp,
-                            "end_timestamp": segment.end_timestamp,
-                            "speaker": segment.speaker,
-                            "confidence": segment.confidence,
-                            "segment_id": segment.segment_id,
-                            "words": segment.words
-                        })
+                # Get server timestamp from audio chunk if available
 
-                    if result:
-                        transcription = Transcript(
-                            self.meeting.meeting_id,
-                            self.redis_client,
-                            result  # Store the full segment data
-                        )
-                        await transcription.lpush()
-                        self.logger.info("pushed")
-                        self.done = True
-                    else:
-                        self.done = False
+                # Convert whisper segments to TranscriptSegment objects with server timestamp
+                transcription_data = [
+                    TranscriptSegment.from_whisper_segment(
+                        segment,
+                        server_timestamp=(self.meeting.start_server_timestamp.isoformat() if self.meeting.start_server_timestamp else None)
+                    )
+                    for segment in result['segments']
+                ]
+                
+                # Get speaker data from Redis
+                speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
+                speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
+                
+                # Match speakers to segments
+                matched_segments = self.matcher.match(speaker_data, transcription_data)
 
-        except Exception as e:
-            self.logger.error(f"Error in transcription process: {str(e)}")
-            self.done = False
+                # Prepare segments for storage
+                result = []
+                transcription_time = datetime.now(timezone.utc).isoformat()
+                for segment in matched_segments:
+                    result.append({
+                        "content": segment.content,
+                        "start_timestamp": segment.start_timestamp,
+                        "end_timestamp": segment.end_timestamp,
+                        "speaker": segment.speaker,
+                        "confidence": segment.confidence,
+                        "segment_id": segment.segment_id,
+                        "words": segment.words,
+                        "server_timestamp": segment.server_timestamp,
+                        "transcription_timestamp": transcription_time
+                    })
+
+                if result:
+                    transcription = Transcript(
+                        self.meeting.meeting_id,
+                        self.redis_client,
+                        result  # Store the full segment data
+                    )
+                    await transcription.lpush()
+                    self.logger.info("pushed")
+                    self.done = True
+                else:
+                    self.done = False
+
+        # except Exception as e:
+        #     self.logger.error(f"Error in transcription process: {str(e)}")
+        #     self.done = False
 
 
     async def find_next_seek(self, overlap=0):
@@ -174,12 +187,17 @@ class Processor:
     async def do_finally(self):
         # Only proceed with cleanup if we have a meeting
         if not hasattr(self, 'meeting') or self.meeting is None:
+            self.logger.info("No meeting to process in do_finally")
             return
             
-        if self.slice_duration/self.max_length > 0.9:
+        self.logger.info(f"Processing do_finally - slice_duration: {self.slice_duration}, max_length: {self.max_length}, ratio: {self.slice_duration/self.max_length:.2f}")
+        
+        if self.slice_duration/self.max_length > 0.8:
+            self.logger.info(f"Adding to todo - slice duration ratio ({self.slice_duration/self.max_length:.2f}) > 0.9 indicates more audio to process")
             await self.processor.add_todo(self.meeting.meeting_id)
             print("added to todo")
         else:
+            self.logger.info(f"Removing from in_progress - slice duration ratio ({self.slice_duration/self.max_length:.2f}) <= 0.9 indicates end of processable audio")
             await self.processor.remove(self.meeting.meeting_id)
             print("removed from in_progress")
         await self.meeting.update_redis()

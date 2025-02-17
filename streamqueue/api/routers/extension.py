@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Optional
 import logging
+import uuid
 
 from dateutil import parser
 from dateutil.tz import UTC
@@ -22,6 +23,13 @@ router = APIRouter(prefix="/extension", tags=["extension"])
 @router.get("/check-token")
 async def check_token(request: Request) -> TokenValidationResult:
     user_id = request.state.user_id
+    # Validate user_id is a valid UUID
+    try:
+        uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        logger.error(f"Invalid user_id format: {user_id}")
+        return TokenValidationResult(is_valid=False)
+        
     logger.info(f"Token check for user {user_id}")
     return TokenValidationResult(is_valid=bool(user_id))
 

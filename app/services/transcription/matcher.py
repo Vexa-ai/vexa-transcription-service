@@ -54,9 +54,9 @@ class SpeakerMeta(BaseModel):
             
             # Parse timestamp
             try:
-                timestamp = datetime.fromisoformat(data['timestamp'].rstrip('Z'))
+                timestamp = datetime.fromisoformat(data['user_timestamp'].rstrip('Z'))
             except (ValueError, AttributeError):
-                logger.warning(f"Invalid timestamp format in speaker data: {data.get('timestamp')}")
+                logger.warning(f"Invalid timestamp format in speaker data: {data.get('user_timestamp')}")
                 timestamp = datetime.now(timezone.utc)
             
             return cls(
@@ -102,6 +102,10 @@ class TranscriptSegment:
     confidence: float = 0.0
     segment_id: Optional[int] = None
     words: List[List[float]] = field(default_factory=list)
+    server_timestamp: Optional[str] = None  # Changed from datetime to str to ensure JSON serialization
+
+    # Class-level counter for generating unique segment IDs
+    _next_segment_id: int = 1
 
     @property
     def duration(self) -> float:
@@ -109,18 +113,43 @@ class TranscriptSegment:
         return self.end_timestamp - self.start_timestamp
 
     @classmethod
-    def from_whisper_segment(cls, segment_data: List) -> 'TranscriptSegment':
-        """Create TranscriptSegment from Whisper output format."""
+    def from_whisper_segment(cls, segment_data, server_timestamp: Optional[str] = None) -> 'TranscriptSegment':
+        """Create TranscriptSegment from Whisper output format.
+        
+        Args:
+            segment_data: Dict containing segment information with fields:
+                - start: Start time in seconds
+                - end: End time in seconds
+                - text: Transcribed text
+                - words: Optional word-level information
+            server_timestamp: Optional server timestamp
+        """
         try:
-            segment_id = segment_data[0]
-            start = float(segment_data[2])
-            end = float(segment_data[3])
-            text = str(segment_data[4])
-            words = segment_data[10] if len(segment_data) > 10 else []
+            # Ensure segment_data is a dict
+            if not isinstance(segment_data, dict):
+                raise ValueError(f"Expected dict, got {type(segment_data)}")
             
-            # Calculate average word confidence
-            if words:
-                confidence = sum(word[3] for word in words) / len(words)
+            # Extract required fields with proper error handling
+            try:
+                start = float(segment_data.get("start", 0))
+                end = float(segment_data.get("end", 0))
+                text = str(segment_data.get("text", ""))
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Invalid segment data format for start/end/text: {e}")
+            
+            # Generate a new segment ID
+            segment_id = cls._next_segment_id
+            cls._next_segment_id += 1
+            
+            # Extract optional fields
+            words = segment_data.get("words", [])
+            
+            # Calculate confidence if word-level info available
+            if words and isinstance(words, list):
+                try:
+                    confidence = sum(word.get("confidence", 0) for word in words) / len(words)
+                except (TypeError, AttributeError):
+                    confidence = 0.0
             else:
                 confidence = 0.0
                 
@@ -130,7 +159,8 @@ class TranscriptSegment:
                 end_timestamp=end,
                 confidence=confidence,
                 segment_id=segment_id,
-                words=words
+                words=words,
+                server_timestamp=server_timestamp
             )
         except Exception as e:
             logger.error(f"Error creating TranscriptSegment: {e}", exc_info=True)
