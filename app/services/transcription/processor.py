@@ -21,6 +21,7 @@ from app.services.audio.redis_models import (
     TranscriptPrompt,
     best_covering_connection,
     connection_with_minimal_start_greater_than_target,
+    get_timestamps_overlap
 )
 from app.services.transcription.matcher import TranscriptSpeakerMatcher, TranscriptSegment, SpeakerMeta
 
@@ -66,7 +67,6 @@ class Processor:
 
         self.meeting = Meeting(self.redis_client, meeting_id)
 
-
         await self.meeting.load_from_redis()
         self.seek_timestamp = self.meeting.transcriber_seek_timestamp
         
@@ -78,11 +78,17 @@ class Processor:
 
         self.connections = await self.meeting.get_connections()
         self.logger.info(f"number of connections: {len(self.connections)}")
-        self.connection = best_covering_connection(self.seek_timestamp, current_time, self.connections) #should not be current time but instead end seek, which is last seek + accumulated step (so that we add step to accumulated if no overlapping connection)
-
+        
+        # Get both best connection and overlapping connections
+        connection_result = best_covering_connection(self.seek_timestamp, current_time, self.connections)
+        self.connection = connection_result.best_connection
+        self.overlapping_connections = connection_result.overlapping_connections
+        
+        self.logger.info(f"Found {len(self.overlapping_connections)} overlapping connections")
+        
         if self.connection:
-            self.logger.info(f"Connection ID: {self.connection.id}")
-
+            self.logger.info(f"Best Connection ID: {self.connection.id}")
+            
             if self.seek_timestamp < self.connection.start_timestamp:
                 self.seek_timestamp = self.connection.start_timestamp
 
@@ -102,7 +108,7 @@ class Processor:
                 return
 
             except Exception:
-                self.logger.error(f"could nod read file {path} at seek {seek} with length {self.max_length}")
+                self.logger.error(f"could not read file {path} at seek {seek} with length {self.max_length}")
                 await self.meeting.delete_connection(self.connection.id)
                 return
 
@@ -110,9 +116,8 @@ class Processor:
         try:
             # Get previous prompt if available
             prompt_cache = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)
-            initial_prompt = await prompt_cache.get()
-            print(initial_prompt)
-            self.logger.info(f"Retrieved initial prompt for meeting {self.meeting.meeting_id}: {'Found' if initial_prompt else 'None'}")
+            prefix_prompt = await prompt_cache.get()
+            self.logger.info(f"Retrieved prefix prompt for meeting {self.meeting.meeting_id}: {'Found' if prefix_prompt else 'None'}")
             
             # Prepare request payload
             request_data = aiohttp.FormData()
@@ -121,9 +126,9 @@ class Processor:
                                  filename='audio.wav',
                                  content_type='audio/wav')
             
-            if initial_prompt:
-                request_data.add_field('initial_prompt', initial_prompt)
-                self.logger.info(f"Added initial prompt to request (length: {len(initial_prompt)} chars)")
+            if prefix_prompt:
+                request_data.add_field('prefix', prefix_prompt)
+                self.logger.info(f"Added prefix prompt to request (length: {len(prefix_prompt)} chars)")
             
             # Call whisper service with prompt
             headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
@@ -168,20 +173,72 @@ class Processor:
                     matched_segments = self.matcher.match(speaker_data, transcription_data)
                     self.logger.info(f"Matched {len(matched_segments)} segments with speakers")
 
+                    # Calculate user presence for each segment
+                    for segment in matched_segments:
+                        # Convert relative seconds to absolute timestamps using self.matcher.t0 as base
+                        abs_start = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.start_timestamp)
+                        abs_end = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.end_timestamp)
+                        segment_duration = (abs_end - abs_start).total_seconds()
+                        
+                        self.logger.debug(
+                            f"Processing segment {segment.segment_id} "
+                            f"duration: {segment_duration:.2f}s, "
+                            f"start: {abs_start}, end: {abs_end}"
+                        )
+                        
+                        present_users = set()
+                        partially_present = set()
+                        
+                        for connection, total_overlap in self.overlapping_connections:
+                            if not connection.user_id:
+                                continue
+                                
+                            overlap = get_timestamps_overlap(
+                                abs_start, 
+                                abs_end,
+                                connection.start_timestamp,
+                                connection.end_timestamp
+                            )
+                            
+                            if overlap > 0:
+                                overlap_ratio = overlap / segment_duration
+                                self.logger.debug(
+                                    f"User {connection.user_id} overlap ratio: {overlap_ratio:.2f} "
+                                    f"for segment {segment.segment_id}"
+                                )
+                                
+                                if overlap_ratio >= 0.5:
+                                    present_users.add(connection.user_id)
+                                else:
+                                    partially_present.add(connection.user_id)
+                        
+                        segment.present_user_ids = list(present_users)
+                        segment.partially_present_user_ids = list(partially_present)
+                        self.logger.info(
+                            f"Segment {segment.segment_id}: {len(present_users)} present users, "
+                            f"{len(partially_present)} partially present users"
+                        )
+                        
+                        # Update segment timestamps to absolute values for storage
+                        segment.start_timestamp = abs_start
+                        segment.end_timestamp = abs_end
+
                     # Prepare segments for storage
                     result = []
                     transcription_time = datetime.now(timezone.utc).isoformat()
                     for segment in matched_segments:
                         result.append({
                             "content": segment.content,
-                            "start_timestamp": segment.start_timestamp,
-                            "end_timestamp": segment.end_timestamp,
+                            "start_timestamp": segment.start_timestamp.isoformat(),
+                            "end_timestamp": segment.end_timestamp.isoformat(),
                             "speaker": segment.speaker,
                             "confidence": segment.confidence,
                             "segment_id": segment.segment_id,
                             "words": segment.words,
                             "server_timestamp": segment.server_timestamp,
-                            "transcription_timestamp": transcription_time
+                            "transcription_timestamp": transcription_time,
+                            "present_user_ids": segment.present_user_ids,
+                            "partially_present_user_ids": segment.partially_present_user_ids
                         })
 
                     if result:
@@ -200,12 +257,12 @@ class Processor:
                             self.logger.info(f"Generated new text for prompt (length: {len(new_text)} chars)")
                             
                             # If we had a previous prompt, append new text
-                            if initial_prompt:
-                                combined_text = f"{initial_prompt} {new_text}"
-                                self.logger.info("Appended new text to existing prompt")
+                            if prefix_prompt:
+                                combined_text = f"{prefix_prompt} {new_text}"
+                                self.logger.info("Appended new text to existing prefix")
                             else:
                                 combined_text = new_text
-                                self.logger.info("Using new text as prompt (no previous prompt)")
+                                self.logger.info("Using new text as prefix (no previous prefix)")
                                 
                             # Tokenize and keep last 400 tokens
                             try:
@@ -217,18 +274,18 @@ class Processor:
                                     self.logger.info("Truncated to last 400 tokens")
                                     
                                 final_text = self.tokenizer.decode(tokens)
-                                self.logger.info(f"Final prompt length: {len(final_text)} chars")
+                                self.logger.info(f"Final prefix length: {len(final_text)} chars")
                                 
                                 # Update cache with TTL
                                 cache_updated = await prompt_cache.update(final_text)
                                 if not cache_updated:
-                                    self.logger.warning("Failed to update transcript prompt cache")
+                                    self.logger.warning("Failed to update transcript prefix cache")
                                 else:
-                                    self.logger.info("Successfully updated prompt cache with TTL")
+                                    self.logger.info("Successfully updated prefix cache with TTL")
                             except Exception as e:
                                 self.logger.warning(f"Tokenization error: {str(e)}", exc_info=True)
                         except Exception as e:
-                            self.logger.warning(f"Error updating prompt cache: {str(e)}", exc_info=True)
+                            self.logger.warning(f"Error updating prefix cache: {str(e)}", exc_info=True)
                         
                         self.done = True
                     else:

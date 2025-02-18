@@ -96,13 +96,15 @@ def convert_speaker_data(speaker_json_list: List[str]) -> List[SpeakerMeta]:
 class TranscriptSegment:
     """A segment of transcribed speech with timing and speaker information."""
     content: str
-    start_timestamp: float
-    end_timestamp: float
+    start_timestamp: float  # Start time in seconds relative to audio start
+    end_timestamp: float   # End time in seconds relative to audio start
     speaker: Optional[str] = None
     confidence: float = 0.0
     segment_id: Optional[int] = None
     words: List[List[float]] = field(default_factory=list)
-    server_timestamp: Optional[str] = None  # Changed from datetime to str to ensure JSON serialization
+    server_timestamp: Optional[str] = None  # ISO format string
+    present_user_ids: List[str] = field(default_factory=list)
+    partially_present_user_ids: List[str] = field(default_factory=list)
 
     # Class-level counter for generating unique segment IDs
     _next_segment_id: int = 1
@@ -123,6 +125,9 @@ class TranscriptSegment:
                 - text: Transcribed text
                 - words: Optional word-level information
             server_timestamp: Optional server timestamp
+            
+        Returns:
+            TranscriptSegment with timing information in seconds
         """
         try:
             # Ensure segment_data is a dict
@@ -155,8 +160,8 @@ class TranscriptSegment:
                 
             return cls(
                 content=text,
-                start_timestamp=start,
-                end_timestamp=end,
+                start_timestamp=start,  # Store as float seconds
+                end_timestamp=end,    # Store as float seconds
                 confidence=confidence,
                 segment_id=segment_id,
                 words=words,
@@ -240,13 +245,17 @@ class TranscriptSpeakerMatcher:
             
             # Match each transcription segment
             for segment in transcription_data:
-                segment.start_timestamp = pd.Timedelta(segment.start_timestamp, unit='s') + pd.to_datetime(self.t0)
-                segment.end_timestamp = pd.Timedelta(segment.end_timestamp, unit='s') + pd.to_datetime(self.t0)
+                # Convert relative seconds to absolute timestamps
+                start_sec = float(segment.start_timestamp)
+                end_sec = float(segment.end_timestamp)
+                
+                segment_start = pd.to_datetime(self.t0) + pd.Timedelta(seconds=start_sec)
+                segment_end = pd.to_datetime(self.t0) + pd.Timedelta(seconds=end_sec)
                 
                 # Calculate intersection with speaker segments
                 diar_df['intersection'] = np.maximum(
                     0,
-                    np.minimum(diar_df['end'], segment.end_timestamp) - np.maximum(diar_df['start'], segment.start_timestamp)
+                    np.minimum(diar_df['end'], segment_end) - np.maximum(diar_df['start'], segment_start)
                 ).astype('timedelta64[ns]')
                 
                 # Find best matching speaker
@@ -257,15 +266,11 @@ class TranscriptSpeakerMatcher:
                 if len(best_match) > 0:
                     segment.speaker = best_match.iloc[0]['speaker']
                     # Set confidence based on intersection ratio and mic level
-                    intersection_ratio = best_match.iloc[0]['intersection'] / (segment.end_timestamp - segment.start_timestamp)
+                    intersection_ratio = best_match.iloc[0]['intersection'] / (segment_end - segment_start)
                     segment.confidence = float(intersection_ratio * best_match.iloc[0]['mic'])
                 else:
                     segment.speaker = None
                     segment.confidence = 0.0
-                
-                # Convert timestamps back to ISO format strings
-                segment.start_timestamp = segment.start_timestamp.isoformat()
-                segment.end_timestamp = segment.end_timestamp.isoformat()
 
         return transcription_data
 

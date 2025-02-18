@@ -39,4 +39,6 @@ class TranscriptSegmentModel(BaseModel):
     meeting_id: Optional[str] = None
     words: Optional[List[List[Any]]] = None
     server_timestamp: Optional[datetime] = None  # Original server timestamp from extension
-    transcription_timestamp: Optional[datetime] = None  # When the transcription was processed 
+    transcription_timestamp: Optional[datetime] = None  # When the transcription was processed
+    present_user_ids: List[str] = Field(default_factory=list)
+    partially_present_user_ids: List[str] = Field(default_factory=list) 

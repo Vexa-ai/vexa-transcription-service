@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Tuple, NamedTuple
 
 from dateutil import parser
 from dateutil.tz import UTC
@@ -286,44 +286,40 @@ def get_timestamps_overlap(start1, end1, start2, end2):
     return max(0, delta)
 
 
-# def best_covering_connection(target_start, target_end, connections):
-#     #TODO: change if to choose between connections that are 1 minimimize gap between target start and connection start 2 maximum overlap
-#     best_connection = None
-#     max_overlap = 0
+class ConnectionResult(NamedTuple):
+    best_connection: Optional['Connection']
+    overlapping_connections: List[Tuple['Connection', float]]  # List of (connection, overlap_duration) pairs
 
-#     for connection in connections:
-#         overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
-#         if overlap > max_overlap:
-#             max_overlap = overlap
-#             best_connection = connection
-
-#     return best_connection
-
-
-def best_covering_connection(target_start, target_end, connections):
+def best_covering_connection(target_start, target_end, connections) -> ConnectionResult:
+    """Find the best covering connection and all overlapping connections.
+    
+    Args:
+        target_start: Target start timestamp
+        target_end: Target end timestamp
+        connections: List of available connections
+        
+    Returns:
+        ConnectionResult containing:
+        - best_connection: Connection with minimal start time difference
+        - overlapping_connections: List of (connection, overlap_duration) pairs
+    """
     best_connection = None
-    # max_overlap = 0
     min_start_diff = float("inf")
-    overlapped_connections = []
+    overlapping_connections = []
 
-    # Find all connections that overlap with the target interval
+    # Find all overlapping connections
     for connection in connections:
         overlap = get_timestamps_overlap(target_start, target_end, connection.start_timestamp, connection.end_timestamp)
         if overlap > 0:
-            overlapped_connections.append(connection)
+            overlapping_connections.append((connection, overlap))
+            
+            # Update best connection (existing logic)
+            start_diff = abs((target_start - connection.start_timestamp).total_seconds())
+            if start_diff < min_start_diff:
+                min_start_diff = start_diff
+                best_connection = connection
 
-    # If there are no overlapping connections, return None
-    if not overlapped_connections:
-        return None
-
-    # Among the overlapping connections, find the one closest to the target start time
-    for connection in overlapped_connections:
-        start_diff = abs((target_start - connection.start_timestamp).total_seconds())
-        if start_diff < min_start_diff:
-            min_start_diff = start_diff
-            best_connection = connection
-
-    return best_connection
+    return ConnectionResult(best_connection, overlapping_connections)
 
 
 def connection_with_minimal_start_greater_than_target(target_start, connections):
