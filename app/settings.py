@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     raw_audio_path: str = os.getenv('RAW_AUDIO_PATH')
     segments_path: str = os.getenv('SEGMENTS_PATH')
     redis_password: str | None = os.getenv('REDIS_PASSWORD')
+    transcriber_step_sec: int = int(os.getenv('TRANSCRIBER_STEP_SEC', '1'))
+    max_audio_length_sec: int = int(os.getenv('MAX_AUDIO_LENGTH_SEC', '5'))
     
     speaker_delay_sec: int = 1
 

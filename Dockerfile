@@ -10,7 +10,7 @@ RUN python -m pip install --upgrade pip
 # Install dependencies
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
-RUN apt-get update && apt-get install -y ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg supervisor
 
 # Create necessary directories
 RUN mkdir -p /usr/src/app/streamqueue /usr/src/app/app

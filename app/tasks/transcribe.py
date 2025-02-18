@@ -19,7 +19,7 @@ async def main():
     try:
         redis_client = await get_redis_client(settings.redis_host, settings.redis_port,settings.redis_password)
 
-        processor = Processor(redis_client, logger,max_length=5)
+        processor = Processor(redis_client, logger, max_length=settings.max_audio_length_sec)
         while True:
             try:
                 ok = await processor.read()

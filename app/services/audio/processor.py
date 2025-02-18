@@ -19,33 +19,43 @@ logger = logging.getLogger(__name__)
 class Processor:
     def __init__(self):
         self.__running_tasks = set()
+        self.__redis_client = None  # Will be initialized in setup
 
-    async def _get_new_connections(self, redis_client: Redis):
+    async def setup(self):
+        """Initialize Redis client if not already initialized."""
+        if self.__redis_client is None:
+            self.__redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
+        return self.__redis_client
+
+    async def _get_new_connections(self):
         """Get new connections by scanning Redis for initialFeed_audio keys."""
         pattern = "initialFeed_audio:*"
         connections = []
-        async for key in redis_client.scan_iter(match=pattern):
+        async for key in self.__redis_client.scan_iter(match=pattern):
             connection_id = key.split(':')[1]
             connections.append((connection_id, key))
         return connections
 
     async def process_connections(self):
-        logger.info("Process connections...")
-        redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
+        if not self.__redis_client:
+            await self.setup()
         
-        connections = await self._get_new_connections(redis_client)
+        connections = await self._get_new_connections()
         for connection_id, key in connections:
             logger.info(f"Processing connection {connection_id}")
             await self._process_connection_task(connection_id)
             # Remove the key after processing
-            await redis_client.delete(key)
+            await self.__redis_client.delete(key)
 
     async def _process_connection_task(
         self,
         connection_id,
-        transcriber_step: int = 1,
+        transcriber_step: int = None,
     ) -> None:
-        redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
+        # Use settings value if not provided
+        if transcriber_step is None:
+            transcriber_step = settings.transcriber_step_sec
+        # Reuse the existing Redis client
         meeting_id, segment_start_user_timestamp, segment_end_user_timestamp, segment_start_server_timestamp, user_id = await self.writestream2file(connection_id)
 
         # If we didn't get valid data from writestream2file, skip processing
@@ -55,10 +65,10 @@ class Processor:
 
         current_time = datetime.now(timezone.utc) #TODO: consider using transcriber_last_updated_timestamp + step and rename to update_time
 
-        connection = Connection(redis_client, connection_id, user_id)
+        connection = Connection(self.__redis_client, connection_id, user_id)
         await connection.update_timestamps(segment_start_user_timestamp, segment_end_user_timestamp)
 
-        meeting = Meeting(redis_client, meeting_id)
+        meeting = Meeting(self.__redis_client, meeting_id)
 
         await meeting.load_from_redis()
         await meeting.add_connection(connection.id)
@@ -76,7 +86,7 @@ class Processor:
 
         if time_since_last_update > transcriber_step:
             logger.info(f"Adding transcriber - time threshold exceeded ({time_since_last_update} > {transcriber_step} seconds)")
-            transcriber = Transcriber(redis_client)
+            transcriber = Transcriber(self.__redis_client)
             await transcriber.add_todo(meeting.meeting_id)
             await meeting.update_transcriber_timestamp(
                 segment_start_user_timestamp, transcriber_last_updated_timestamp=current_time 
@@ -92,8 +102,7 @@ class Processor:
         first_user_timestamp = None
         first_server_timestamp = None
         
-        redis_client = await get_redis_client(settings.redis_host, settings.redis_port, settings.redis_password)
-        audio_chunk_dal = AudioChunkDAL(redis_client)
+        audio_chunk_dal = AudioChunkDAL(self.__redis_client)
         chunks = await audio_chunk_dal.pop_chunks(connection_id, limit=100)
 
         if chunks:

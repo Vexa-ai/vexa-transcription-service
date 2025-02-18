@@ -16,3 +16,4 @@ redis
 regex
 starlette
 uvicorn
+tiktoken
