@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional, Union
 
 from dateutil import parser
@@ -337,3 +337,47 @@ def connection_with_minimal_start_greater_than_target(target_start, connections)
                 best_connection = connection
 
     return best_connection
+
+
+class TranscriptPrompt(Data):
+    """Redis model for storing and retrieving transcript prompts with TTL."""
+    def __init__(self, meeting_id: str, redis_client: Redis):
+        super().__init__(
+            key=f"transcript_prompt:{meeting_id}",
+            redis_client=redis_client
+        )
+        
+    async def update(self, text: str) -> bool:
+        """Update the transcript prompt text with TTL.
+        
+        Args:
+            text: The transcript text to store
+            
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        try:
+            data = {
+                "text": text,
+                "last_update": datetime.now(timezone.utc).isoformat()
+            }
+            await self.redis_client.set(self.key, json.dumps(data), ex=60)  # 60 second TTL
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to update transcript prompt: {e}")
+            return False
+            
+    async def get(self) -> Optional[str]:
+        """Retrieve the current transcript prompt text.
+        
+        Returns:
+            Optional[str]: The stored transcript text or None if not found/error
+        """
+        try:
+            data = await self.redis_client.get(self.key)
+            if data:
+                return json.loads(data)["text"]
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to retrieve transcript prompt: {e}")
+            return None

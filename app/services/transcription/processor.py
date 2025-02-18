@@ -5,10 +5,11 @@ import aiohttp
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, List, Union
+from typing import Any, List, Union, Optional
 from uuid import uuid4
 
 import pandas as pd
+import tiktoken
 from redis.asyncio.client import Redis
 
 from app.redis_transcribe import keys
@@ -17,6 +18,7 @@ from app.services.audio.redis_models import (
     Meeting,
     Transcriber,
     Transcript,
+    TranscriptPrompt,
     best_covering_connection,
     connection_with_minimal_start_greater_than_target,
 )
@@ -51,6 +53,7 @@ class Processor:
         self.processor = Transcriber(self.redis_client)
         self.matcher = None  # Initialize as None, will be set after we have seek_timestamp
         self.slice_duration = 0  # Initialize slice_duration
+        self.tokenizer = tiktoken.get_encoding("gpt2")  # Initialize tokenizer
 
     async def read(self):
        # self.logger.info("start read")
@@ -104,70 +107,137 @@ class Processor:
                 return
 
     async def transcribe(self):
-        # try:
-        headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self.whisper_service_url, data=self.audio_data, headers=headers) as response:
-                if response.status != 200:
-                    self.logger.error(f"Whisper service error: {response.status}")
-                    if response.status == 401:
-                        self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
-                    self.done = False
-                    return
-                
-                result = await response.json()
-                
-                # Log the structure of the response
+        try:
+            # Get previous prompt if available
+            prompt_cache = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)
+            initial_prompt = await prompt_cache.get()
+            print(initial_prompt)
+            self.logger.info(f"Retrieved initial prompt for meeting {self.meeting.meeting_id}: {'Found' if initial_prompt else 'None'}")
+            
+            # Prepare request payload
+            request_data = aiohttp.FormData()
+            request_data.add_field('audio_data', 
+                                 self.audio_data, 
+                                 filename='audio.wav',
+                                 content_type='audio/wav')
+            
+            if initial_prompt:
+                request_data.add_field('initial_prompt', initial_prompt)
+                self.logger.info(f"Added initial prompt to request (length: {len(initial_prompt)} chars)")
+            
+            # Call whisper service with prompt
+            headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
+            self.logger.info(f"Sending request to whisper service: {self.whisper_service_url}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.whisper_service_url,
+                    data=request_data,
+                    headers=headers
+                ) as response:
+                    self.logger.info(f"Whisper service response status: {response.status}")
+                    if response.status != 200:
+                        self.logger.error(f"Whisper service error: {response.status}")
+                        if response.status == 401:
+                            self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
+                        else:
+                            response_text = await response.text()
+                            self.logger.error(f"Response content: {response_text}")
+                        self.done = False
+                        return
+                    
+                    result = await response.json()
+                    self.logger.info(f"Received response with {len(result.get('segments', []))} segments")
+                    
+                    # Convert whisper segments to TranscriptSegment objects with server timestamp
+                    transcription_data = [
+                        TranscriptSegment.from_whisper_segment(
+                            segment,
+                            server_timestamp=(self.meeting.start_server_timestamp.isoformat() if self.meeting.start_server_timestamp else None)
+                        )
+                        for segment in result['segments']
+                    ]
+                    self.logger.info(f"Converted {len(transcription_data)} segments to TranscriptSegment objects")
+                    
+                    # Get speaker data from Redis
+                    speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
+                    speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
+                    self.logger.info(f"Retrieved {len(speaker_data)} speaker data entries from Redis")
+                    
+                    # Match speakers to segments
+                    matched_segments = self.matcher.match(speaker_data, transcription_data)
+                    self.logger.info(f"Matched {len(matched_segments)} segments with speakers")
 
-                # Get server timestamp from audio chunk if available
+                    # Prepare segments for storage
+                    result = []
+                    transcription_time = datetime.now(timezone.utc).isoformat()
+                    for segment in matched_segments:
+                        result.append({
+                            "content": segment.content,
+                            "start_timestamp": segment.start_timestamp,
+                            "end_timestamp": segment.end_timestamp,
+                            "speaker": segment.speaker,
+                            "confidence": segment.confidence,
+                            "segment_id": segment.segment_id,
+                            "words": segment.words,
+                            "server_timestamp": segment.server_timestamp,
+                            "transcription_timestamp": transcription_time
+                        })
 
-                # Convert whisper segments to TranscriptSegment objects with server timestamp
-                transcription_data = [
-                    TranscriptSegment.from_whisper_segment(
-                        segment,
-                        server_timestamp=(self.meeting.start_server_timestamp.isoformat() if self.meeting.start_server_timestamp else None)
-                    )
-                    for segment in result['segments']
-                ]
-                
-                # Get speaker data from Redis
-                speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
-                speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
-                
-                # Match speakers to segments
-                matched_segments = self.matcher.match(speaker_data, transcription_data)
+                    if result:
+                        # Store transcription result
+                        transcription = Transcript(
+                            self.meeting.meeting_id,
+                            self.redis_client,
+                            result
+                        )
+                        await transcription.lpush()
+                        self.logger.info(f"Pushed {len(result)} transcription segments to Redis")
+                        
+                        try:
+                            # Update prompt cache with new content
+                            new_text = " ".join(segment["content"] for segment in result)
+                            self.logger.info(f"Generated new text for prompt (length: {len(new_text)} chars)")
+                            
+                            # If we had a previous prompt, append new text
+                            if initial_prompt:
+                                combined_text = f"{initial_prompt} {new_text}"
+                                self.logger.info("Appended new text to existing prompt")
+                            else:
+                                combined_text = new_text
+                                self.logger.info("Using new text as prompt (no previous prompt)")
+                                
+                            # Tokenize and keep last 400 tokens
+                            try:
+                                tokens = self.tokenizer.encode(combined_text)
+                                self.logger.info(f"Tokenized combined text: {len(tokens)} tokens")
+                                
+                                if len(tokens) > 400:
+                                    tokens = tokens[-400:]
+                                    self.logger.info("Truncated to last 400 tokens")
+                                    
+                                final_text = self.tokenizer.decode(tokens)
+                                self.logger.info(f"Final prompt length: {len(final_text)} chars")
+                                
+                                # Update cache with TTL
+                                cache_updated = await prompt_cache.update(final_text)
+                                if not cache_updated:
+                                    self.logger.warning("Failed to update transcript prompt cache")
+                                else:
+                                    self.logger.info("Successfully updated prompt cache with TTL")
+                            except Exception as e:
+                                self.logger.warning(f"Tokenization error: {str(e)}", exc_info=True)
+                        except Exception as e:
+                            self.logger.warning(f"Error updating prompt cache: {str(e)}", exc_info=True)
+                        
+                        self.done = True
+                    else:
+                        self.logger.warning("No segments in result, marking as not done")
+                        self.done = False
 
-                # Prepare segments for storage
-                result = []
-                transcription_time = datetime.now(timezone.utc).isoformat()
-                for segment in matched_segments:
-                    result.append({
-                        "content": segment.content,
-                        "start_timestamp": segment.start_timestamp,
-                        "end_timestamp": segment.end_timestamp,
-                        "speaker": segment.speaker,
-                        "confidence": segment.confidence,
-                        "segment_id": segment.segment_id,
-                        "words": segment.words,
-                        "server_timestamp": segment.server_timestamp,
-                        "transcription_timestamp": transcription_time
-                    })
-
-                if result:
-                    transcription = Transcript(
-                        self.meeting.meeting_id,
-                        self.redis_client,
-                        result  # Store the full segment data
-                    )
-                    await transcription.lpush()
-                    self.logger.info("pushed")
-                    self.done = True
-                else:
-                    self.done = False
-
-        # except Exception as e:
-        #     self.logger.error(f"Error in transcription process: {str(e)}")
-        #     self.done = False
+        except Exception as e:
+            self.logger.error(f"Error in transcription process: {str(e)}", exc_info=True)
+            self.done = False
 
 
     async def find_next_seek(self, overlap=0):
@@ -187,17 +257,17 @@ class Processor:
     async def do_finally(self):
         # Only proceed with cleanup if we have a meeting
         if not hasattr(self, 'meeting') or self.meeting is None:
-            self.logger.info("No meeting to process in do_finally")
+          #  self.logger.info("No meeting to process in do_finally")
             return
             
-        self.logger.info(f"Processing do_finally - slice_duration: {self.slice_duration}, max_length: {self.max_length}, ratio: {self.slice_duration/self.max_length:.2f}")
+      #  self.logger.info(f"Processing do_finally - slice_duration: {self.slice_duration}, max_length: {self.max_length}, ratio: {self.slice_duration/self.max_length:.2f}")
         
-        if self.slice_duration/self.max_length > 0.8:
-            self.logger.info(f"Adding to todo - slice duration ratio ({self.slice_duration/self.max_length:.2f}) > 0.9 indicates more audio to process")
-            await self.processor.add_todo(self.meeting.meeting_id)
-            print("added to todo")
-        else:
-            self.logger.info(f"Removing from in_progress - slice duration ratio ({self.slice_duration/self.max_length:.2f}) <= 0.9 indicates end of processable audio")
-            await self.processor.remove(self.meeting.meeting_id)
-            print("removed from in_progress")
+        # if self.slice_duration/self.max_length > 0.5:
+        #     self.logger.info(f"Adding to todo - slice duration ratio ({self.slice_duration/self.max_length:.2f}) > 0.9 indicates more audio to process")
+        #     await self.processor.add_todo(self.meeting.meeting_id)
+        #     print("added to todo")
+        # else:
+        #self.logger.info(f"Removing from in_progress - slice duration ratio ({self.slice_duration/self.max_length:.2f}) <= 0.9 indicates end of processable audio")
+        await self.processor.remove(self.meeting.meeting_id)
+    #    print("removed from in_progress")
         await self.meeting.update_redis()
