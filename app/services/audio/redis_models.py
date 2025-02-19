@@ -97,6 +97,49 @@ class Transcript(Data):
         return all_transcripts
 
     @classmethod
+    async def get_all_transcripts_json(cls, redis_client: Redis) -> str:
+        """Get all transcripts from Redis as a JSON string and write to segments.json file.
+        
+        Args:
+            redis_client: Redis client instance
+            
+        Returns:
+            str: JSON string containing all transcripts with their metadata
+        """
+        transcripts = await cls.get_all_transcripts(redis_client)
+        
+        # Create a structured format grouping transcripts by meeting_id
+        meetings = {}
+        for transcript in transcripts:
+            meeting_id = transcript['meeting_id']
+            if meeting_id not in meetings:
+                meetings[meeting_id] = []
+            meetings[meeting_id].append(transcript)
+            
+        # Sort segments within each meeting by start_timestamp
+        for meeting_id in meetings:
+            meetings[meeting_id].sort(key=lambda x: x.get('start_timestamp', ''))
+            
+        output = {
+            'meetings': meetings,
+            'total_segments': len(transcripts),
+            'total_meetings': len(meetings),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        
+        json_str = json.dumps(output, default=str, indent=2)
+        
+        # Write to segments.json file
+        try:
+            with open('segments.json', 'w', encoding='utf-8') as f:
+                f.write(json_str)
+            logger.info("Successfully wrote transcripts to segments.json")
+        except Exception as e:
+            logger.error(f"Failed to write segments.json: {e}")
+            
+        return json_str
+
+    @classmethod
     async def get_all_transcripts_df(cls, redis_client: Redis) -> 'pd.DataFrame':
         """Get all transcripts from Redis as a pandas DataFrame.
         

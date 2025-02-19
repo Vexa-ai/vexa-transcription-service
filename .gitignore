@@ -16,3 +16,4 @@ venv/
 engine_
 audio.code-workspace
 tst
+*.json
