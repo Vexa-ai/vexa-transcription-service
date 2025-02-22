@@ -1,6 +1,6 @@
 """Tests for transcript-speaker matching functionality."""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.transcription.matcher import (
     TranscriptSpeakerMatcher,
     TranscriptSegment,
@@ -10,22 +10,22 @@ from app.services.transcription.matcher import (
 
 @pytest.fixture
 def base_timestamp():
-    return datetime(2024, 1, 1, 12, 0, 0)
+    return datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def matcher():
-    return TranscriptSpeakerMatcher()
+def matcher(base_timestamp):
+    return TranscriptSpeakerMatcher(t0=base_timestamp)
 
 
-def test_matcher_initialization():
+def test_matcher_initialization(base_timestamp):
     """Test matcher initialization with different intersection thresholds."""
     # Default threshold
-    matcher = TranscriptSpeakerMatcher()
+    matcher = TranscriptSpeakerMatcher(t0=base_timestamp)
     assert matcher.min_intersection_sec == 0.1
 
     # Custom threshold
-    matcher = TranscriptSpeakerMatcher(min_intersection_sec=0.2)
+    matcher = TranscriptSpeakerMatcher(t0=base_timestamp, min_intersection_sec=0.2)
     assert matcher.min_intersection_sec == 0.2
 
 

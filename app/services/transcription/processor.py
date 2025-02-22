@@ -5,7 +5,7 @@ import aiohttp
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, List, Union, Optional
+from typing import Any, List, Union, Optional, Dict
 from uuid import uuid4
 
 import pandas as pd
@@ -24,6 +24,8 @@ from app.services.audio.redis_models import (
     get_timestamps_overlap
 )
 from app.services.transcription.matcher import TranscriptSpeakerMatcher, TranscriptSegment, SpeakerMeta
+from app.services.api.engine_client import EngineAPIClient
+from app.services.transcription.queues import TranscriptQueueManager, QueuedTranscript
 
 
 def parse_segment(segment):
@@ -48,15 +50,41 @@ class Processor:
     logger: Any = field(default=logging.getLogger(__name__))
     whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
     whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
+    engine_api_url: str = 'http://host.docker.internal:8010' #field(default_factory=lambda: os.getenv("ENGINE_API_URL")) #TEMP TODO: fix
+    engine_api_token: str = field(default_factory=lambda: os.getenv("ENGINE_API_TOKEN"))
     max_length: int = field(default=30)
 
     def __post_init__(self):
         self.processor = Transcriber(self.redis_client)
-        self.matcher = None  # Initialize as None, will be set after we have seek_timestamp
-        self.slice_duration = 0  # Initialize slice_duration
-        self.tokenizer = tiktoken.get_encoding("gpt2")  # Initialize tokenizer
+        self.matcher = None
+        self.slice_duration = 0
+        self.tokenizer = tiktoken.get_encoding("gpt2")
+        # Initialize engine client with proper timeout and retry settings
+        self.engine_client = EngineAPIClient(
+            self.engine_api_url,
+            self.engine_api_token,
+            timeout=30,  # Increase timeout
+            max_retries=5  # Increase max retries
+        )
+        self.queue_manager = TranscriptQueueManager(self.redis_client)
+        self._failed_ingestions = {}
+
+    def should_alert_for_failures(self, meeting_id: str) -> bool:
+        """
+        Check if we should alert for failures based on error count.
+        Alerts if there have been 3 or more consecutive failures.
+        """
+        return self._failed_ingestions.get(meeting_id, 0) >= 3
+
+    async def send_alert(self, message: str):
+        """
+        Send alert through logging for now.
+        This could be extended to send alerts through other channels.
+        """
+        self.logger.error(f"ALERT: {message}")
 
     async def read(self):
+        
        # self.logger.info("start read")
         meeting_id = await self.processor.pop_inprogress()
       #  self.logger.info(f"meeting_id: {meeting_id}")
@@ -112,190 +140,220 @@ class Processor:
                 await self.meeting.delete_connection(self.connection.id)
                 return
 
-    async def transcribe(self):
+    async def transcribe(self, transcription_model=None):
+        """Main transcription orchestration method"""
         try:
-            # Get previous prompt if available
-            prompt_cache = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)
-            prefix_prompt = await prompt_cache.get()
-            self.logger.info(f"Retrieved prefix prompt for meeting {self.meeting.meeting_id}: {'Found' if prefix_prompt else 'None'}")
-            
-            # Prepare request payload
-            request_data = aiohttp.FormData()
-            request_data.add_field('audio_data', 
-                                 self.audio_data, 
-                                 filename='audio.wav',
-                                 content_type='audio/wav')
-            
-            if prefix_prompt:
-                request_data.add_field('prefix', prefix_prompt)
-                self.logger.info(f"Added prefix prompt to request (length: {len(prefix_prompt)} chars)")
-            
-            # Call whisper service with prompt
-            headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
-            self.logger.info(f"Sending request to whisper service: {self.whisper_service_url}")
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.whisper_service_url,
-                    data=request_data,
-                    headers=headers
-                ) as response:
-                    self.logger.info(f"Whisper service response status: {response.status}")
-                    if response.status != 200:
-                        self.logger.error(f"Whisper service error: {response.status}")
-                        if response.status == 401:
-                            self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
-                        else:
-                            response_text = await response.text()
-                            self.logger.error(f"Response content: {response_text}")
-                        self.done = False
-                        return
-                    
-                    result = await response.json()
-                    self.logger.info(f"Received response with {len(result.get('segments', []))} segments")
-                    
-                    # Convert whisper segments to TranscriptSegment objects with server timestamp
-                    transcription_data = [
-                        TranscriptSegment.from_whisper_segment(
-                            segment,
-                            server_timestamp=(self.meeting.start_server_timestamp.isoformat() if self.meeting.start_server_timestamp else None)
-                        )
-                        for segment in result['segments']
-                    ]
-                    self.logger.info(f"Converted {len(transcription_data)} segments to TranscriptSegment objects")
-                    
-                    # Get speaker data from Redis
-                    speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
-                    speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
-                    self.logger.info(f"Retrieved {len(speaker_data)} speaker data entries from Redis")
-                    
-                    # Match speakers to segments
-                    matched_segments = self.matcher.match(speaker_data, transcription_data)
-                    self.logger.info(f"Matched {len(matched_segments)} segments with speakers")
+            # Log transcription start
+            self.logger.info(f"Starting transcription for meeting {self.meeting.meeting_id}")
+            self.logger.info(f"Using {'direct model' if transcription_model else 'whisper service'} for transcription")
 
-                    # Calculate user presence for each segment
-                    for segment in matched_segments:
-                        # Convert relative seconds to absolute timestamps using self.matcher.t0 as base
-                        abs_start = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.start_timestamp)
-                        abs_end = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.end_timestamp)
-                        segment_duration = (abs_end - abs_start).total_seconds()
-                        
-                        self.logger.debug(
-                            f"Processing segment {segment.segment_id} "
-                            f"duration: {segment_duration:.2f}s, "
-                            f"start: {abs_start}, end: {abs_end}"
-                        )
-                        
-                        present_users = set()
-                        partially_present = set()
-                        
-                        for connection, total_overlap in self.overlapping_connections:
-                            if not connection.user_id:
-                                continue
-                                
-                            overlap = get_timestamps_overlap(
-                                abs_start, 
-                                abs_end,
-                                connection.start_timestamp,
-                                connection.end_timestamp
-                            )
-                            
-                            if overlap > 0:
-                                overlap_ratio = overlap / segment_duration
-                                self.logger.debug(
-                                    f"User {connection.user_id} overlap ratio: {overlap_ratio:.2f} "
-                                    f"for segment {segment.segment_id}"
-                                )
-                                
-                                if overlap_ratio >= 0.5:
-                                    present_users.add(connection.user_id)
-                                else:
-                                    partially_present.add(connection.user_id)
-                        
-                        segment.present_user_ids = list(present_users)
-                        segment.partially_present_user_ids = list(partially_present)
-                        self.logger.info(
-                            f"Segment {segment.segment_id}: {len(present_users)} present users, "
-                            f"{len(partially_present)} partially present users"
-                        )
-                        
-                        # Update segment timestamps to absolute values for storage
-                        segment.start_timestamp = abs_start
-                        segment.end_timestamp = abs_end
-
-                    # Prepare segments for storage
-                    result = []
-                    transcription_time = datetime.now(timezone.utc).isoformat()
-                    for segment in matched_segments:
-                        result.append({
-                            "content": segment.content,
-                            "start_timestamp": segment.start_timestamp.isoformat(),
-                            "end_timestamp": segment.end_timestamp.isoformat(),
-                            "speaker": segment.speaker,
-                            "confidence": segment.confidence,
-                            "segment_id": segment.segment_id,
-                            "words": segment.words,
-                            "server_timestamp": segment.server_timestamp,
-                            "transcription_timestamp": transcription_time,
-                            "present_user_ids": segment.present_user_ids,
-                            "partially_present_user_ids": segment.partially_present_user_ids
-                        })
-
-                    if result:
-                        # Store transcription result
-                        transcription = Transcript(
-                            self.meeting.meeting_id,
-                            self.redis_client,
-                            result
-                        )
-                        await transcription.lpush()
-                        self.logger.info(f"Pushed {len(result)} transcription segments to Redis")
-                        
-                        try:
-                            # Update prompt cache with new content
-                            new_text = " ".join(segment["content"] for segment in result)
-                            self.logger.info(f"Generated new text for prompt (length: {len(new_text)} chars)")
-                            
-                            # If we had a previous prompt, append new text
-                            if prefix_prompt:
-                                combined_text = f"{prefix_prompt} {new_text}"
-                                self.logger.info("Appended new text to existing prefix")
-                            else:
-                                combined_text = new_text
-                                self.logger.info("Using new text as prefix (no previous prefix)")
-                                
-                            # Tokenize and keep last 400 tokens
-                            try:
-                                tokens = self.tokenizer.encode(combined_text)
-                                self.logger.info(f"Tokenized combined text: {len(tokens)} tokens")
-                                
-                                if len(tokens) > 400:
-                                    tokens = tokens[-400:]
-                                    self.logger.info("Truncated to last 400 tokens")
-                                    
-                                final_text = self.tokenizer.decode(tokens)
-                                self.logger.info(f"Final prefix length: {len(final_text)} chars")
-                                
-                                # Update cache with TTL
-                                cache_updated = await prompt_cache.update(final_text)
-                                if not cache_updated:
-                                    self.logger.warning("Failed to update transcript prefix cache")
-                                else:
-                                    self.logger.info("Successfully updated prefix cache with TTL")
-                            except Exception as e:
-                                self.logger.warning(f"Tokenization error: {str(e)}", exc_info=True)
-                        except Exception as e:
-                            self.logger.warning(f"Error updating prefix cache: {str(e)}", exc_info=True)
-                        
-                        self.done = True
-                    else:
-                        self.logger.warning("No segments in result, marking as not done")
-                        self.done = False
-
+            # Get raw transcription
+            transcription_result = await self._perform_audio_transcription(transcription_model)
+            if not transcription_result:
+                self.logger.error("Failed to get transcription result")
+                self.done = False
+                return
+            
+            self.logger.info(f"Successfully received transcription with {len(transcription_result['segments'])} segments")
+            
+            # Process and match segments
+            matched_segments = await self._process_segments(transcription_result['segments'])
+            self.logger.info(f"Processed and matched {len(matched_segments)} segments with speakers")
+            
+            # Store and queue segments
+            success = await self._store_and_queue_segments(matched_segments)
+            self.logger.info(f"{'Successfully stored' if success else 'Failed to store'} segments to Redis and queue")
+            
+            self.done = success
         except Exception as e:
             self.logger.error(f"Error in transcription process: {str(e)}", exc_info=True)
             self.done = False
+            raise
 
+    async def _perform_audio_transcription(self, transcription_model=None):
+        """Perform actual audio transcription using either direct model or whisper service and update transcription history"""
+        # Get previous transcription history if available
+        last_transcripts = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)  # TODO: Rename class to TranscriptionHistory
+        last_transcripts = await last_transcripts.get()
+        self.logger.info(f"Retrieved transcription history for meeting {self.meeting.meeting_id}: {'Found' if last_transcripts else 'None'}")
+        
+        if transcription_model is not None:
+            # Use direct model transcription
+            segments = transcription_model.transcribe(self.audio_data)
+            result = {"segments": segments}
+            self.logger.info(f"Received {len(segments)} segments from direct model transcription")
+        else:
+            result = await self._call_whisper_service(last_transcripts)
+            if not result:
+                return None
+            
+        await self._update_transcription_history(result['segments'])
+        
+        return result
+
+    async def _call_whisper_service(self, last_transcripts):
+        """Call the whisper service to get transcription"""
+        request_data = aiohttp.FormData()
+        request_data.add_field('audio_data', 
+                              self.audio_data, 
+                              filename='audio.wav',
+                              content_type='audio/wav')
+        
+        if last_transcripts:
+            request_data.add_field('prefix', last_transcripts)
+            
+        headers = {"Authorization": f"Bearer {self.whisper_api_token}"}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.whisper_service_url,
+                data=request_data,
+                headers=headers
+            ) as response:
+                if response.status != 200:
+                    self.logger.error(f"Whisper service error: {response.status}")
+                    if response.status == 401:
+                        self.logger.error("Authentication failed - check WHISPER_API_TOKEN")
+                    else:
+                        response_text = await response.text()
+                        self.logger.error(f"Response content: {response_text}")
+                    return None
+                
+                return await response.json()
+
+    async def _process_segments(self, whisper_segments):
+        """Process and match segments with speakers and user presence"""
+        # Convert to TranscriptSegment objects
+        transcription_data = [
+            TranscriptSegment.from_whisper_segment(
+                segment,
+                server_timestamp=(self.meeting.start_server_timestamp.isoformat() 
+                                if self.meeting.start_server_timestamp else None)
+            )
+            for segment in whisper_segments
+        ]
+        
+        # Get and match speaker data
+        speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
+        speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
+        matched_segments = self.matcher.match(speaker_data, transcription_data)
+        
+        # Calculate user presence for each segment
+        for segment in matched_segments:
+            await self._calculate_user_presence(segment)
+        
+        return matched_segments
+
+    async def _calculate_user_presence(self, segment):
+        """Calculate user presence for a segment"""
+        abs_start = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.start_timestamp)
+        abs_end = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.end_timestamp)
+        segment_duration = (abs_end - abs_start).total_seconds()
+        
+        present_users = set()
+        partially_present = set()
+        
+        for connection, total_overlap in self.overlapping_connections:
+            if not connection.user_id:
+                continue
+            
+            overlap = get_timestamps_overlap(
+                abs_start, 
+                abs_end,
+                connection.start_timestamp,
+                connection.end_timestamp
+            )
+            
+            if overlap > 0:
+                overlap_ratio = overlap / segment_duration
+                if overlap_ratio >= 0.5:
+                    present_users.add(connection.user_id)
+                else:
+                    partially_present.add(connection.user_id)
+        
+        segment.present_user_ids = list(present_users)
+        segment.partially_present_user_ids = list(partially_present)
+        segment.start_timestamp = abs_start
+        segment.end_timestamp = abs_end
+
+    async def _store_and_queue_segments(self, matched_segments):
+        """Store segments in Redis and queue for ingestion"""
+        try:
+            result = []
+            transcription_time = datetime.now(timezone.utc).isoformat()
+            
+            # Store segments and add to ingestion queue
+            for segment in matched_segments:
+                segment_data = self._prepare_segment_data(segment, transcription_time)
+                result.append(segment_data)
+                
+                transcript = QueuedTranscript(
+                    meeting_id=self.meeting.meeting_id,
+                    segment_id=segment.segment_id,
+                    content=segment_data
+                )
+                queued = await self.queue_manager.add_to_ingestion_queue(transcript)
+                self.logger.info(
+                    f"Segment {segment.segment_id} {'added to' if queued else 'failed to add to'} ingestion queue"
+                )
+            
+            if result:
+                # Store in Redis
+                transcription = Transcript(
+                    self.meeting.meeting_id,
+                    self.redis_client,
+                    result
+                )
+                await transcription.lpush()
+                self.logger.info(f"Stored {len(result)} segments in Redis cache")
+                
+                # Process ingestion queue
+                self.logger.info("Starting ingestion queue processing")
+                await self.process_ingestion_queue()
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Error storing/queueing segments: {str(e)}", exc_info=True)
+            return False
+
+    def _prepare_segment_data(self, segment, transcription_time):
+        """Prepare segment data for storage and ingestion"""
+        return {
+            "content": segment.content,
+            "start_timestamp": segment.start_timestamp.isoformat(),
+            "end_timestamp": segment.end_timestamp.isoformat(),
+            "speaker": segment.speaker,
+            "confidence": segment.confidence,
+            "segment_id": segment.segment_id,
+            "words": segment.words,
+            "server_timestamp": segment.server_timestamp,
+            "transcription_timestamp": transcription_time,
+            "present_user_ids": segment.present_user_ids,
+            "partially_present_user_ids": segment.partially_present_user_ids
+        }
+
+    async def _update_transcription_history(self, raw_segments):
+        """Update the transcription history with raw transcription segments"""
+        try:
+            transcription_history = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)
+            last_transcripts = await transcription_history.get()
+            
+            # Extract text from the list format segments
+            new_text = " ".join(segment[4] if len(segment) > 4 else "" for segment in raw_segments)
+            self.logger.info(f"Generated new text for history from raw segments (length: {len(new_text)} chars)")
+            
+            combined_text = f"{last_transcripts} {new_text}" if last_transcripts else new_text
+            
+            tokens = self.tokenizer.encode(combined_text)
+            if len(tokens) > 400:
+                tokens = tokens[-400:]
+                self.logger.info("Truncated history to last 400 tokens")
+            final_text = self.tokenizer.decode(tokens)
+            
+            await transcription_history.update(final_text)
+            self.logger.info(f"Successfully updated transcription history with {len(final_text)} chars")
+        except Exception as e:
+            self.logger.warning(f"Error updating transcription history: {str(e)}", exc_info=True)
 
     async def find_next_seek(self, overlap=0):
         if self.done:
@@ -328,3 +386,75 @@ class Processor:
         await self.processor.remove(self.meeting.meeting_id)
     #    print("removed from in_progress")
         await self.meeting.update_redis()
+
+    async def process_transcript(
+        self,
+        meeting_id: str,
+        segment_id: int,
+        content: Dict[str, Any]
+    ) -> bool:
+        """
+        Process a single transcript segment by adding it to the ingestion queue.
+        
+        Args:
+            meeting_id: The ID of the meeting
+            segment_id: The ID of the segment
+            content: The transcript segment content
+            
+        Returns:
+            bool: True if successfully added to queue, False otherwise
+        """
+        transcript = QueuedTranscript(
+            meeting_id=meeting_id,
+            segment_id=segment_id,
+            content=content
+        )
+        return await self.queue_manager.add_to_ingestion_queue(transcript)
+
+    async def process_ingestion_queue(self) -> None:
+        """Process segments from the ingestion queue"""
+        processed_count = 0
+        retry_count = 0
+        
+        while True:
+            transcript = await self.queue_manager.get_next_for_ingestion()
+            if not transcript:
+                break
+                
+            try:
+                self.logger.info(f"Processing segment {transcript.segment_id} from ingestion queue")
+                success = await self.engine_client.ingest_transcript_segments(
+                    external_id=transcript.meeting_id,
+                    segments=[transcript.content]
+                )
+                
+                if success:
+                    await self.queue_manager.confirm_processed(transcript)
+                    processed_count += 1
+                    self.logger.info(f"Successfully ingested segment {transcript.segment_id}")
+                else:
+                    await self.queue_manager.add_to_retry_queue(
+                        transcript,
+                        "Engine API ingestion failed"
+                    )
+                    retry_count += 1
+                    self.logger.warning(f"Failed to ingest segment {transcript.segment_id}, added to retry queue")
+                    
+            except Exception as e:
+                await self.queue_manager.add_to_retry_queue(
+                    transcript,
+                    f"Error ingesting transcript: {str(e)}"
+                )
+                retry_count += 1
+                self.logger.error(f"Error processing segment {transcript.segment_id}: {str(e)}")
+        
+        self.logger.info(f"Finished processing ingestion queue. Processed: {processed_count}, Retries: {retry_count}")
+
+    async def get_queue_stats(self) -> Dict[str, int]:
+        """
+        Get statistics about the current state of all queues.
+        
+        Returns:
+            Dict containing counts for each queue
+        """
+        return await self.queue_manager.get_queue_stats()

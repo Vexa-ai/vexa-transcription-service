@@ -107,18 +107,6 @@ class Processor:
 
         if chunks:
             meeting_id = connection_id  # default if no meeting_id in data
-            
-            # # Check if file exists - if not, ensure first chunk has index 0
-          #  # if not os.path.exists(path):
-            #     try:
-            #         first_chunk = AudioChunkModel(**chunks[0])
-            #     except ValueError as e:
-            #         logger.error(f"Invalid first chunk data for connection {connection_id}: {e}")
-            #         return None, None, None, None
-                
-            #     if first_chunk.audio_chunk_number != 0:
-            #         logger.warning(f"First chunk index is {first_chunk.audio_chunk_number} instead of 0 for connection {connection_id}")
-            #         return None, None, None, None
 
             for chunk_data in chunks:
                 try:

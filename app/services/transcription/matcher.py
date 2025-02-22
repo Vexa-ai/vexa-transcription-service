@@ -34,7 +34,7 @@ class SpeakerMeta(BaseModel):
             json_str: JSON string containing speaker data with fields:
                 speaker_name: Name of the speaker
                 meta: Binary string representing mic activity
-                timestamp: ISO format timestamp
+                timestamp or user_timestamp: ISO format timestamp
                 meeting_id: Meeting identifier
                 user_id: User identifier
                 speaker_delay_sec: Delay in seconds
@@ -52,11 +52,16 @@ class SpeakerMeta(BaseModel):
             # Count number of '1's and divide by total length
             mic_level = sum(1 for c in meta if c == '1') / max(len(meta), 1)
             
-            # Parse timestamp
+            # Parse timestamp - try both user_timestamp and timestamp fields
             try:
-                timestamp = datetime.fromisoformat(data['user_timestamp'].rstrip('Z'))
+                timestamp_str = data.get('user_timestamp') or data.get('timestamp')
+                if timestamp_str:
+                    timestamp = datetime.fromisoformat(timestamp_str.rstrip('Z'))
+                else:
+                    logger.warning("No timestamp found in speaker data")
+                    timestamp = datetime.now(timezone.utc)
             except (ValueError, AttributeError):
-                logger.warning(f"Invalid timestamp format in speaker data: {data.get('user_timestamp')}")
+                logger.warning(f"Invalid timestamp format in speaker data: {data.get('user_timestamp') or data.get('timestamp')}")
                 timestamp = datetime.now(timezone.utc)
             
             return cls(
@@ -119,35 +124,33 @@ class TranscriptSegment:
         """Create TranscriptSegment from Whisper output format.
         
         Args:
-            segment_data: Dict containing segment information with fields:
-                - start: Start time in seconds
-                - end: End time in seconds
-                - text: Transcribed text
-                - words: Optional word-level information
+            segment_data: Dict or List containing segment information
             server_timestamp: Optional server timestamp
             
         Returns:
             TranscriptSegment with timing information in seconds
         """
         try:
-            # Ensure segment_data is a dict
-            if not isinstance(segment_data, dict):
-                raise ValueError(f"Expected dict, got {type(segment_data)}")
-            
-            # Extract required fields with proper error handling
-            try:
+
+            # Handle both dict and list formats
+            if isinstance(segment_data, list):
+                # Assuming list format is [start, end, text]
+                start = float(segment_data[0])
+                end = float(segment_data[1])
+                text = str(segment_data[2]) if len(segment_data) > 2 else ""
+                words = segment_data[3] if len(segment_data) > 3 else []
+            elif isinstance(segment_data, dict):
+                # Original dict format handling
                 start = float(segment_data.get("start", 0))
                 end = float(segment_data.get("end", 0))
                 text = str(segment_data.get("text", ""))
-            except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid segment data format for start/end/text: {e}")
+                words = segment_data.get("words", [])
+            else:
+                raise ValueError(f"Unexpected segment data type: {type(segment_data)}")
             
             # Generate a new segment ID
             segment_id = cls._next_segment_id
             cls._next_segment_id += 1
-            
-            # Extract optional fields
-            words = segment_data.get("words", [])
             
             # Calculate confidence if word-level info available
             if words and isinstance(words, list):
@@ -160,8 +163,8 @@ class TranscriptSegment:
                 
             return cls(
                 content=text,
-                start_timestamp=start,  # Store as float seconds
-                end_timestamp=end,    # Store as float seconds
+                start_timestamp=start,
+                end_timestamp=end,
                 confidence=confidence,
                 segment_id=segment_id,
                 words=words,
@@ -169,6 +172,7 @@ class TranscriptSegment:
             )
         except Exception as e:
             logger.error(f"Error creating TranscriptSegment: {e}", exc_info=True)
+            logger.error(f"Problematic segment data: {segment_data}")
             raise ValueError(f"Invalid segment data format: {e}")
 
 class SpeakerSegment:

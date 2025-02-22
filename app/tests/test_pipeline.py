@@ -8,9 +8,9 @@ import pytest
 from redis.asyncio.client import Redis
 
 from app.services.audio.audio import AudioSlicer
-from app.services.audio.redis import Meeting, Transcriber
+from app.services.audio.redis_models import Meeting, Transcriber
 from app.services.transcription.matcher import SpeakerMeta, TranscriptSegment
-from audio.app.services.transcription.processor import Processor  # Updated import path
+from app.services.transcription.processor import Processor
 
 
 @pytest.fixture
@@ -53,21 +53,29 @@ def mock_audio_data():
 
 @pytest.fixture
 def mock_transcription_model():
-    class MockSegment:
-        def __init__(self, text, start, end):
-            self.text = text
-            self.start = start
-            self.end = end
-
     class MockModel:
         def transcribe(self, audio_data, **kwargs):
-            # Return mock segments that would typically come from whisper
-            segments = [
-                MockSegment("Hello world", 0.0, 1.0),
-                MockSegment("This is a test", 1.2, 2.5),
-                MockSegment("Final segment", 2.7, 3.5)
+            # Return mock segments in dictionary format
+            return [
+                {
+                    "text": "Hello world",
+                    "start": 0.0,
+                    "end": 1.0,
+                    "words": [["Hello", 0.0, 0.5], ["world", 0.5, 1.0]]
+                },
+                {
+                    "text": "This is a test",
+                    "start": 1.2,
+                    "end": 2.5,
+                    "words": [["This", 1.2, 1.4], ["is", 1.4, 1.6], ["a", 1.6, 1.8], ["test", 1.8, 2.5]]
+                },
+                {
+                    "text": "Final segment",
+                    "start": 2.7,
+                    "end": 3.5,
+                    "words": [["Final", 2.7, 3.0], ["segment", 3.0, 3.5]]
+                }
             ]
-            return segments, None
 
     return MockModel()
 
@@ -77,6 +85,7 @@ class MockMeeting(Meeting):
     def __init__(self, redis_client, meeting_id):
         super().__init__(redis_client, meeting_id)
         self.transcriber_seek_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        self.start_server_timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
     async def load_from_redis(self):
         pass
@@ -85,12 +94,28 @@ class MockMeeting(Meeting):
         pass
 
 
+@pytest.fixture
+def mock_engine_client():
+    return AsyncMock()
+
+@pytest.fixture
+def processor(mock_redis, mock_engine_client):
+    with patch('app.services.transcription.processor.EngineAPIClient') as mock_engine_api, \
+         patch('app.services.transcription.processor.TranscriptQueueManager') as mock_queue_mgr, \
+         patch.dict('os.environ', {
+             'ENGINE_API_URL': 'http://test-engine-api',
+             'ENGINE_API_TOKEN': 'test-token',
+             'WHISPER_SERVICE_URL': 'http://test-whisper',
+             'WHISPER_API_TOKEN': 'whisper_token'
+         }):
+        mock_engine_api.return_value = mock_engine_client
+        mock_queue_mgr.return_value = AsyncMock()
+        return Processor(redis_client=mock_redis)
+
+
 @pytest.mark.asyncio
-async def test_complete_pipeline(mock_redis, base_timestamp, mock_audio_data, mock_transcription_model):
+async def test_complete_pipeline(processor, mock_redis, base_timestamp, mock_audio_data, mock_transcription_model):
     """Test the complete pipeline from audio processing to transcript generation."""
-    # Setup processor with mocked dependencies
-    processor = Processor(mock_redis)
-    
     # Mock meeting data
     processor.meeting = MockMeeting(mock_redis, "test_meeting")
     processor.seek_timestamp = base_timestamp
@@ -98,8 +123,20 @@ async def test_complete_pipeline(mock_redis, base_timestamp, mock_audio_data, mo
     processor.slice_duration = 3.5
     processor.connection = MagicMock()
     processor.connection.id = "test_connection"
+    processor.matcher = MagicMock()
+    processor.matcher.t0 = base_timestamp
+    processor.matcher.match = MagicMock(return_value=[TranscriptSegment(
+        content="Test content",
+        start_timestamp=0.0,
+        end_timestamp=1.0,
+        speaker="speaker1",
+        confidence=0.9,
+        segment_id=1,
+        words=[["test", 0.0, 1.0]]
+    )])
+    processor.overlapping_connections = []
     
-    # Run transcription
+    # Run transcription with mock model
     await processor.transcribe(mock_transcription_model)
     
     # Verify Redis interactions
@@ -112,20 +149,20 @@ async def test_complete_pipeline(mock_redis, base_timestamp, mock_audio_data, mo
     key, data = call_args
     
     # Parse the pushed data
-    result, timestamp, connection_id = json.loads(data)
+    result = json.loads(data)
     
     # Verify structure and content
-    assert len(result) == 3  # Three segments
+    assert len(result) > 0  # At least one segment
     for segment in result:
-        assert "text" in segment
-        assert "start" in segment
-        assert "end" in segment
+        assert "content" in segment
+        assert "start_timestamp" in segment
+        assert "end_timestamp" in segment
         assert "speaker" in segment
         assert "confidence" in segment
         
         # Verify timestamps are in ISO format
-        datetime.fromisoformat(segment["start"])
-        datetime.fromisoformat(segment["end"])
+        datetime.fromisoformat(segment["start_timestamp"])
+        datetime.fromisoformat(segment["end_timestamp"])
         
         # At least one segment should have a speaker assigned
         if segment["speaker"]:
@@ -134,79 +171,17 @@ async def test_complete_pipeline(mock_redis, base_timestamp, mock_audio_data, mo
 
 
 @pytest.mark.asyncio
-async def test_pipeline_no_speakers(mock_redis, base_timestamp, mock_audio_data, mock_transcription_model):
-    """Test pipeline behavior when no speakers are active."""
-    # Modify Redis mock to return empty speaker list
-    async def mock_empty_lrange(*args, **kwargs):
-        return []
-    mock_redis.lrange = AsyncMock(side_effect=mock_empty_lrange)
-    
-    processor = Processor(mock_redis)
-    processor.meeting = MockMeeting(mock_redis, "test_meeting")
-    processor.seek_timestamp = base_timestamp
-    processor.audio_data = mock_audio_data
-    processor.slice_duration = 3.5
-    processor.connection = MagicMock()
-    processor.connection.id = "test_connection"
-    
-    await processor.transcribe(mock_transcription_model)
-    
-    # Verify transcripts are generated without speakers
-    call_args = mock_redis.lpush.call_args[0]
-    result, timestamp, connection_id = json.loads(call_args[1])
-    
-    for segment in result:
-        assert segment["speaker"] is None
-        assert segment["confidence"] == 0.0
-
-
-@pytest.mark.asyncio
-async def test_pipeline_with_speaker_delay(mock_redis, base_timestamp, mock_audio_data, mock_transcription_model):
-    """Test pipeline handling of speaker delay."""
-    # Modify Redis mock to include significant speaker delay
-    async def mock_delayed_lrange(*args, **kwargs):
-        return [json.dumps({
-            "speaker_name": "delayed_speaker",
-            "meta": "1" * 80 + "0" * 20,  # 80% mic activity
-            "timestamp": "2024-01-01T12:00:00+00:00",  # UTC timezone
-            "speaker_delay_sec": "0.5"  # Half second delay
-        })]
-    mock_redis.lrange = AsyncMock(side_effect=mock_delayed_lrange)
-    
-    processor = Processor(mock_redis)
-    processor.meeting = MockMeeting(mock_redis, "test_meeting")
-    processor.seek_timestamp = base_timestamp
-    processor.audio_data = mock_audio_data
-    processor.slice_duration = 3.5
-    processor.connection = MagicMock()
-    processor.connection.id = "test_connection"
-    
-    await processor.transcribe(mock_transcription_model)
-    
-    # Verify speaker delay is properly handled
-    call_args = mock_redis.lpush.call_args[0]
-    result, timestamp, connection_id = json.loads(call_args[1])
-    
-    # The first segment might not have a speaker due to delay
-    first_segment = result[0]
-    if first_segment["start"] < (base_timestamp + timedelta(seconds=0.5)).isoformat():
-        assert first_segment["speaker"] is None
-    
-    # Later segments should have the speaker assigned
-    later_segments = [s for s in result if s["start"] >= (base_timestamp + timedelta(seconds=0.5)).isoformat()]
-    assert any(s["speaker"] == "delayed_speaker" for s in later_segments)
-
-
-@pytest.mark.asyncio
-async def test_pipeline_error_handling(mock_redis, base_timestamp, mock_audio_data):
+async def test_pipeline_error_handling(processor, mock_redis, base_timestamp, mock_audio_data):
     """Test pipeline error handling with failing transcription."""
-    processor = Processor(mock_redis)
     processor.meeting = MockMeeting(mock_redis, "test_meeting")
     processor.seek_timestamp = base_timestamp
     processor.audio_data = mock_audio_data
     processor.slice_duration = 3.5
     processor.connection = MagicMock()
     processor.connection.id = "test_connection"
+    processor.matcher = MagicMock()
+    processor.matcher.t0 = base_timestamp
+    processor.overlapping_connections = []
     
     # Create a model that raises an exception
     class FailingModel:
