@@ -11,6 +11,7 @@ import pandas as pd
 
 from app.redis_transcribe.keys  import SEGMENTS_TRANSCRIBE
 from shared_lib.redis.models import TranscriptSegmentModel
+from app.services.api.engine_client import EngineAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -36,139 +37,112 @@ class Data:
     async def delete(self):
         return bool(await self.redis_client.delete(self.key))
 
+    async def process(self, process_func):
+        """Process items from the queue with retry logic.
+        
+        Args:
+            process_func: Async function that takes data as input and processes it
+            
+        Returns:
+            List[dict]: List of successfully processed items
+        """
+        processed_items = []
+        # Get initial queue length
+        queue_length = await self.redis_client.llen(self.key)
 
-class Transcript(Data):
+
+        for _ in range(queue_length * 2):
+            try:
+                # Pop the item
+                data = await self.rpop()
+                if not data:
+                    break  # No more items in queue
+                
+                # Try to process it
+                processed_data = await process_func(self.data)
+                processed_items.append(processed_data)
+                
+            except Exception as e:
+                logger.error(f"Error processing data from {self.key}: {e}")
+                # Put the data back if we failed
+                if self.data:  # Only push back if we actually popped something
+                    await self.lpush()
+
+
+class TranscriptStore(Data):
     def __init__(self, meeting_id: str, redis_client: Redis, data: List = None):
         super().__init__(key=f"{SEGMENTS_TRANSCRIBE}:{meeting_id}", redis_client=redis_client, data=data)
 
     @classmethod
-    async def get_all_transcripts(cls, redis_client: Redis) -> List[dict]:
-        """Get all transcripts from Redis regardless of meeting ID."""
+    async def get_raw_transcript_data(cls, redis_client: Redis) -> dict:
+        """Get raw transcript data from Redis without validation.
+        
+        Args:
+            redis_client: Redis client instance
+            
+        Returns:
+            dict: Raw transcript data organized by meeting_id with original format preserved
+        """
         keys = await redis_client.keys(f"{SEGMENTS_TRANSCRIBE}:*")
-        all_transcripts = []
+        raw_data = {}
         
         for key in keys:
+            meeting_id = key.decode('utf-8').split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
+            raw_data[meeting_id] = []
+            
             transcript_data = await redis_client.lrange(key, 0, -1)
-            meeting_id = key.split(":")[-1]  # Extract meeting_id from the key
             for data in transcript_data:
                 try:
-                    transcript = json.loads(data)
-                    if isinstance(transcript, list):
-                        for segment in transcript:
-                            # Skip segments with invalid IDs
-                            if 'segment_id' not in segment or segment['segment_id'] is None:
-                                logger.warning(f"Skipping segment in meeting {meeting_id} due to missing segment_id")
-                                continue
-                            
-                            # Transform words format if needed
-                            if 'words' in segment and isinstance(segment['words'], list):
-                                segment['words'] = [
-                                    [word.get('word'), word.get('start'), word.get('end')]
-                                    if isinstance(word, dict) else word
-                                    for word in segment['words']
-                                ]
-                            
-                            segment['meeting_id'] = meeting_id
-                            validated_segment = TranscriptSegmentModel(**segment)
-                            all_transcripts.append(validated_segment.model_dump())
+                    if isinstance(data, bytes):
+                        data = data.decode('utf-8')
+                    parsed_data = json.loads(data)
+                    raw_data[meeting_id].append(parsed_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not decode transcript data from key {key}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error processing transcript data from key {key}: {e}")
+                    
+        return raw_data
+
+    @classmethod
+    async def process_all_transcripts(cls, redis_client: Redis, engine_client: EngineAPIClient):
+        """Process all transcript data from Redis using EngineAPIClient.
+        
+        Args:
+            redis_client: Redis client instance
+            engine_client: EngineAPIClient instance for ingesting transcripts
+        """
+        # Get all keys for transcript segments
+        keys = await redis_client.keys(f"{SEGMENTS_TRANSCRIBE}:*")
+        
+        for key in keys:
+            meeting_id = key.decode('utf-8').split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
+            transcript_store = cls(meeting_id, redis_client)
+            
+            # Define the processing function for this meeting
+            async def process_segment(segment):
+                if not segment:
+                    return
+                    
+                try:
+                    # Attempt to ingest this segment
+                    success = await engine_client.ingest_transcript_segments(
+                        external_id=meeting_id,
+                        segments=[segment]  # Process one segment at a time
+                    )
+                    
+                    if success:
+                        logger.info(f"Successfully processed segment for meeting {meeting_id}")
                     else:
-                        # Handle single segment format
-                        if 'segment_id' not in transcript or transcript['segment_id'] is None:
-                            logger.warning(f"Skipping segment in meeting {meeting_id} due to missing segment_id")
-                            continue
+                        logger.error(f"Failed to process segment for meeting {meeting_id}")
+                        raise Exception("Segment ingestion failed")
                         
-                        if 'words' in transcript and isinstance(transcript['words'], list):
-                            transcript['words'] = [
-                                [word.get('word'), word.get('start'), word.get('end')]
-                                if isinstance(word, dict) else word
-                                for word in transcript['words']
-                            ]
-                        
-                        transcript['meeting_id'] = meeting_id
-                        validated_segment = TranscriptSegmentModel(**transcript)
-                        all_transcripts.append(validated_segment.model_dump())
-                except json.JSONDecodeError:
-                    logger.warning(f"Could not decode transcript data from key {key}")
-                    continue
-                except ValueError as e:
-                    logger.warning(f"Invalid transcript data format for key {key}: {e}")
-                    continue
-                
-        return all_transcripts
-
-    @classmethod
-    async def get_all_transcripts_json(cls, redis_client: Redis) -> str:
-        """Get all transcripts from Redis as a JSON string and write to segments.json file.
-        
-        Args:
-            redis_client: Redis client instance
+                except Exception as e:
+                    logger.error(f"Error processing segment for meeting {meeting_id}: {e}")
+                    raise
             
-        Returns:
-            str: JSON string containing all transcripts with their metadata
-        """
-        transcripts = await cls.get_all_transcripts(redis_client)
-        
-        # Create a structured format grouping transcripts by meeting_id
-        meetings = {}
-        for transcript in transcripts:
-            meeting_id = transcript['meeting_id']
-            if meeting_id not in meetings:
-                meetings[meeting_id] = []
-            meetings[meeting_id].append(transcript)
-            
-        # Sort segments within each meeting by start_timestamp
-        for meeting_id in meetings:
-            meetings[meeting_id].sort(key=lambda x: x.get('start_timestamp', ''))
-            
-        output = {
-            'meetings': meetings,
-            'total_segments': len(transcripts),
-            'total_meetings': len(meetings),
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
-        
-        json_str = json.dumps(output, default=str, indent=2)
-        
-        # Write to segments.json file
-        try:
-            with open('segments.json', 'w', encoding='utf-8') as f:
-                f.write(json_str)
-            logger.info("Successfully wrote transcripts to segments.json")
-        except Exception as e:
-            logger.error(f"Failed to write segments.json: {e}")
-            
-        return json_str
-
-    @classmethod
-    async def get_all_transcripts_df(cls, redis_client: Redis) -> 'pd.DataFrame':
-        """Get all transcripts from Redis as a pandas DataFrame.
-        
-        Args:
-            redis_client: Redis client instance
-            
-        Returns:
-            pandas DataFrame with columns:
-                - content: transcript text
-                - start_timestamp: start time
-                - end_timestamp: end time
-                - speaker: speaker name
-                - confidence: confidence score
-                - segment_id: unique segment identifier
-                - meeting_id: meeting identifier
-                - words: word-level data if available
-                - start_server_timestamp: server-side timestamp
-        """
-        transcripts = await cls.get_all_transcripts(redis_client)
-        if not transcripts:
-            return pd.DataFrame()
-            
-        df = pd.DataFrame(transcripts)
-        
-        # Sort by meeting_id and start_timestamp
-        if 'start_timestamp' in df.columns:
-            df = df.sort_values(['meeting_id', 'start_timestamp'])
-            
-        return df
+            # Process all segments for this meeting using the queue pattern
+            await transcript_store.process(process_segment)
 
 
 class Connection:

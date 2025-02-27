@@ -80,8 +80,7 @@ class Processor:
         )
 
         time_since_last_update = (current_time - meeting.transcriber_last_updated_timestamp).seconds
-        logger.info(f"Time since last transcriber update: {time_since_last_update} seconds")
-        logger.info(f"Current transcriber step threshold: {transcriber_step} seconds")
+
         logger.info(f"Last transcriber update timestamp: {meeting.transcriber_last_updated_timestamp}")
 
         if time_since_last_update > transcriber_step:
@@ -105,37 +104,40 @@ class Processor:
         audio_chunk_dal = AudioChunkDAL(self.__redis_client)
         chunks = await audio_chunk_dal.pop_chunks(connection_id, limit=100)
 
-        if chunks:
-            meeting_id = connection_id  # default if no meeting_id in data
+        if not chunks:
+            logger.info(f"No chunks found for connection {connection_id}")
+            return None, None, None, None, None
 
-            for chunk_data in chunks:
-                try:
-                    chunk_obj = AudioChunkModel(**chunk_data)
-                except ValueError as e:
-                    logger.error(f"Invalid chunk data for connection {connection_id}: {e}")
-                    continue
+        meeting_id = connection_id  # default if no meeting_id in data
 
-                raw_chunk = bytes.fromhex(chunk_obj.chunk)
-                first_user_timestamp = (
-                    datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
-                    - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
-                    if not first_user_timestamp
-                    else first_user_timestamp
-                )
-                
-                first_server_timestamp = (
-                    datetime.fromisoformat(chunk_obj.server_timestamp.rstrip("Z")).astimezone(timezone.utc)
-                    - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
-                    if not first_server_timestamp
-                    else first_server_timestamp
-                )
-                
-                with open(path, "ab") as file:
-                    file.write(raw_chunk)
+        for chunk_data in chunks:
+            try:
+                chunk_obj = AudioChunkModel(**chunk_data)
+            except ValueError as e:
+                logger.error(f"Invalid chunk data for connection {connection_id}: {e}")
+                continue
 
-                last_user_timestamp = datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
-                
-                meeting_id = chunk_obj.meeting_id or connection_id
-                user_id = str(chunk_obj.user_id)
+            raw_chunk = bytes.fromhex(chunk_obj.chunk)
+            first_user_timestamp = (
+                datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
+                - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
+                if not first_user_timestamp
+                else first_user_timestamp
+            )
+            
+            first_server_timestamp = (
+                datetime.fromisoformat(chunk_obj.server_timestamp.rstrip("Z")).astimezone(timezone.utc)
+                - timedelta(seconds=chunk_obj.audio_chunk_duration_sec)
+                if not first_server_timestamp
+                else first_server_timestamp
+            )
+            
+            with open(path, "ab") as file:
+                file.write(raw_chunk)
 
-            return meeting_id, first_user_timestamp, last_user_timestamp, first_server_timestamp, user_id
+            last_user_timestamp = datetime.fromisoformat(chunk_obj.user_timestamp.rstrip("Z")).astimezone(timezone.utc)
+            
+            meeting_id = chunk_obj.meeting_id or connection_id
+            user_id = str(chunk_obj.user_id)
+
+        return meeting_id, first_user_timestamp, last_user_timestamp, first_server_timestamp, user_id

@@ -66,6 +66,8 @@ services:
       - REDIS_PASSWORD
       - TRANSCRIBER_STEP_SEC
       - MAX_AUDIO_LENGTH_SEC
+      - ENGINE_API_URL
+      - ENGINE_API_TOKEN
       - PYTHONPATH=/usr/src/app
 
 networks:

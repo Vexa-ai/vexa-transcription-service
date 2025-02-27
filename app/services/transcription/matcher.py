@@ -1,6 +1,6 @@
 """Module for matching transcripts with speakers based on temporal proximity and mic activity."""
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
@@ -105,14 +105,8 @@ class TranscriptSegment:
     end_timestamp: float   # End time in seconds relative to audio start
     speaker: Optional[str] = None
     confidence: float = 0.0
-    segment_id: Optional[int] = None
-    words: List[List[float]] = field(default_factory=list)
+    words: List[Dict[str, Any]] = field(default_factory=list)  # Changed to store full word info
     server_timestamp: Optional[str] = None  # ISO format string
-    present_user_ids: List[str] = field(default_factory=list)
-    partially_present_user_ids: List[str] = field(default_factory=list)
-
-    # Class-level counter for generating unique segment IDs
-    _next_segment_id: int = 1
 
     @property
     def duration(self) -> float:
@@ -124,56 +118,82 @@ class TranscriptSegment:
         """Create TranscriptSegment from Whisper output format.
         
         Args:
-            segment_data: Dict or List containing segment information
+            segment_data: List containing segment information in format:
+                [segment_index, numeric_value, start_time, end_time, text_content, 
+                 token_ids, value1, value2, value3, confidence, word_timings]
             server_timestamp: Optional server timestamp
             
         Returns:
             TranscriptSegment with timing information in seconds
         """
         try:
+            if not isinstance(segment_data, list):
+                raise ValueError(f"Expected list format for segment_data, got {type(segment_data)}")
+            
+            if len(segment_data) < 11:  # Ensure we have all required fields
+                raise ValueError(f"Segment data missing required fields. Expected 11 fields, got {len(segment_data)}")
+            
+            # Unpack the segment data
+            segment_index = segment_data[0]
+            numeric_value = segment_data[1]
+            start_time = segment_data[2]
+            end_time = segment_data[3]
+            text_content = segment_data[4]
+            token_ids = segment_data[5]
+            value1 = segment_data[6]
+            value2 = segment_data[7]
+            value3 = segment_data[8]
+            segment_confidence = segment_data[9]
+            word_timings = segment_data[10]
+            
+            # Process word timings into structured format
+            processed_words = []
+            for word_timing in word_timings:
+                if len(word_timing) == 4:  # [start, end, word, confidence]
+                    start, end, word, word_confidence = word_timing
+                    processed_words.append({
+                        "word": word.strip(),
+                        "start": float(start),
+                        "end": float(end),
+                        "confidence": float(word_confidence)
+                    })
+            
+            # Calculate overall confidence as average of segment and word confidences
+            word_confidences = [w["confidence"] for w in processed_words if "confidence" in w]
+            if word_confidences:
+                avg_word_confidence = sum(word_confidences) / len(word_confidences)
+                overall_confidence = (float(segment_confidence) + avg_word_confidence) / 2
+            else:
+                overall_confidence = float(segment_confidence)
+            
 
-            # Handle both dict and list formats
-            if isinstance(segment_data, list):
-                # Assuming list format is [start, end, text]
-                start = float(segment_data[0])
-                end = float(segment_data[1])
-                text = str(segment_data[2]) if len(segment_data) > 2 else ""
-                words = segment_data[3] if len(segment_data) > 3 else []
-            elif isinstance(segment_data, dict):
-                # Original dict format handling
-                start = float(segment_data.get("start", 0))
-                end = float(segment_data.get("end", 0))
-                text = str(segment_data.get("text", ""))
-                words = segment_data.get("words", [])
-            else:
-                raise ValueError(f"Unexpected segment data type: {type(segment_data)}")
             
-            # Generate a new segment ID
-            segment_id = cls._next_segment_id
-            cls._next_segment_id += 1
-            
-            # Calculate confidence if word-level info available
-            if words and isinstance(words, list):
-                try:
-                    confidence = sum(word.get("confidence", 0) for word in words) / len(words)
-                except (TypeError, AttributeError):
-                    confidence = 0.0
-            else:
-                confidence = 0.0
-                
             return cls(
-                content=text,
-                start_timestamp=start,
-                end_timestamp=end,
-                confidence=confidence,
-                segment_id=segment_id,
-                words=words,
+                content=text_content.strip(),
+                start_timestamp=float(start_time),
+                end_timestamp=float(end_time),
+                confidence=overall_confidence,
+                words=processed_words,
                 server_timestamp=server_timestamp
             )
+            
         except Exception as e:
             logger.error(f"Error creating TranscriptSegment: {e}", exc_info=True)
             logger.error(f"Problematic segment data: {segment_data}")
             raise ValueError(f"Invalid segment data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert segment to dictionary format for storage."""
+        return {
+            "content": self.content,
+            "start_timestamp": self.start_timestamp,
+            "end_timestamp": self.end_timestamp,
+            "speaker": self.speaker,
+            "confidence": self.confidence,
+            "words": self.words,
+            "server_timestamp": self.server_timestamp,
+            "present_user_ids": self.present_user_ids
+        }
 
 class SpeakerSegment:
     """A continuous segment of speaker activity."""
@@ -255,6 +275,9 @@ class TranscriptSpeakerMatcher:
                 
                 segment_start = pd.to_datetime(self.t0) + pd.Timedelta(seconds=start_sec)
                 segment_end = pd.to_datetime(self.t0) + pd.Timedelta(seconds=end_sec)
+                
+                segment.start_timestamp = segment_start
+                segment.end_timestamp = segment_end
                 
                 # Calculate intersection with speaker segments
                 diar_df['intersection'] = np.maximum(

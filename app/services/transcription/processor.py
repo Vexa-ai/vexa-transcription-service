@@ -17,7 +17,7 @@ from app.services.audio.audio import AudioFileCorruptedError, AudioSlicer
 from app.services.audio.redis_models import (
     Meeting,
     Transcriber,
-    Transcript,
+    TranscriptStore,
     TranscriptPrompt,
     best_covering_connection,
     connection_with_minimal_start_greater_than_target,
@@ -26,6 +26,8 @@ from app.services.audio.redis_models import (
 from app.services.transcription.matcher import TranscriptSpeakerMatcher, TranscriptSegment, SpeakerMeta
 from app.services.api.engine_client import EngineAPIClient
 from app.services.transcription.queues import TranscriptQueueManager, QueuedTranscript
+from app.utils.function_logger import function_logger
+from app.utils.file_logger import file_logger
 
 
 def parse_segment(segment):
@@ -50,7 +52,7 @@ class Processor:
     logger: Any = field(default=logging.getLogger(__name__))
     whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
     whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
-    engine_api_url: str = 'http://host.docker.internal:8010' #field(default_factory=lambda: os.getenv("ENGINE_API_URL")) #TEMP TODO: fix
+    engine_api_url: str = field(default_factory=lambda: os.getenv("ENGINE_API_URL"))
     engine_api_token: str = field(default_factory=lambda: os.getenv("ENGINE_API_TOKEN"))
     max_length: int = field(default=30)
 
@@ -173,9 +175,9 @@ class Processor:
     async def _perform_audio_transcription(self, transcription_model=None):
         """Perform actual audio transcription using either direct model or whisper service and update transcription history"""
         # Get previous transcription history if available
-        last_transcripts = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)  # TODO: Rename class to TranscriptionHistory
+        last_transcripts = TranscriptPrompt(self.meeting.meeting_id, self.redis_client)
         last_transcripts = await last_transcripts.get()
-        self.logger.info(f"Retrieved transcription history for meeting {self.meeting.meeting_id}: {'Found' if last_transcripts else 'None'}")
+
         
         if transcription_model is not None:
             # Use direct model transcription
@@ -188,6 +190,14 @@ class Processor:
                 return None
             
         await self._update_transcription_history(result['segments'])
+        
+        
+        function_logger.log(
+            f"_perform_audio_transcription",
+            meeting_id=self.meeting.meeting_id,
+            last_transcripts=last_transcripts,
+            result=result,
+        )
         
         return result
 
@@ -233,6 +243,12 @@ class Processor:
             for segment in whisper_segments
         ]
         
+        file_logger.log(
+            f"_process_segments",
+            meeting_id=self.meeting.meeting_id,
+            transcription_data=transcription_data,
+        )
+        
         # Get and match speaker data
         speaker_data = await self.redis_client.lrange(f"speaker_data", start=0, end=-1)
         speaker_data = [SpeakerMeta.from_json_data(speaker) for speaker in speaker_data]
@@ -240,41 +256,10 @@ class Processor:
         
         # Calculate user presence for each segment
         for segment in matched_segments:
-            await self._calculate_user_presence(segment)
+            segment.present_user_ids = [c[0].user_id for c in self.overlapping_connections]
         
         return matched_segments
 
-    async def _calculate_user_presence(self, segment):
-        """Calculate user presence for a segment"""
-        abs_start = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.start_timestamp)
-        abs_end = pd.to_datetime(self.matcher.t0) + pd.Timedelta(seconds=segment.end_timestamp)
-        segment_duration = (abs_end - abs_start).total_seconds()
-        
-        present_users = set()
-        partially_present = set()
-        
-        for connection, total_overlap in self.overlapping_connections:
-            if not connection.user_id:
-                continue
-            
-            overlap = get_timestamps_overlap(
-                abs_start, 
-                abs_end,
-                connection.start_timestamp,
-                connection.end_timestamp
-            )
-            
-            if overlap > 0:
-                overlap_ratio = overlap / segment_duration
-                if overlap_ratio >= 0.5:
-                    present_users.add(connection.user_id)
-                else:
-                    partially_present.add(connection.user_id)
-        
-        segment.present_user_ids = list(present_users)
-        segment.partially_present_user_ids = list(partially_present)
-        segment.start_timestamp = abs_start
-        segment.end_timestamp = abs_end
 
     async def _store_and_queue_segments(self, matched_segments):
         """Store segments in Redis and queue for ingestion"""
@@ -299,7 +284,7 @@ class Processor:
             
             if result:
                 # Store in Redis
-                transcription = Transcript(
+                transcription = TranscriptStore(
                     self.meeting.meeting_id,
                     self.redis_client,
                     result
@@ -317,20 +302,31 @@ class Processor:
             return False
 
     def _prepare_segment_data(self, segment, transcription_time):
-        """Prepare segment data for storage and ingestion"""
-        return {
-            "content": segment.content,
-            "start_timestamp": segment.start_timestamp.isoformat(),
-            "end_timestamp": segment.end_timestamp.isoformat(),
-            "speaker": segment.speaker,
-            "confidence": segment.confidence,
-            "segment_id": segment.segment_id,
-            "words": segment.words,
-            "server_timestamp": segment.server_timestamp,
-            "transcription_timestamp": transcription_time,
-            "present_user_ids": segment.present_user_ids,
-            "partially_present_user_ids": segment.partially_present_user_ids
-        }
+        """Prepare segment data for storage and ingestion.
+        
+        Args:
+            segment: TranscriptSegment object
+            transcription_time: ISO format string of current UTC time
+            
+        Returns:
+            Dict containing the segment data in storage format
+        """
+        # Convert relative timestamps to absolute ISO format timestamps
+        base_time = pd.to_datetime(self.matcher.t0)
+        start_abs = base_time + pd.Timedelta(seconds=segment.start_timestamp)
+        end_abs = base_time + pd.Timedelta(seconds=segment.end_timestamp)
+        
+        # Get base data from segment
+        segment_dict = segment.to_dict()
+        
+        # Update with absolute timestamps
+        segment_dict.update({
+            "start_timestamp": start_abs.isoformat(),
+            "end_timestamp": end_abs.isoformat(),
+            "transcription_timestamp": transcription_time
+        })
+        
+        return segment_dict
 
     async def _update_transcription_history(self, raw_segments):
         """Update the transcription history with raw transcription segments"""
