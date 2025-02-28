@@ -105,7 +105,7 @@ class TranscriptStore(Data):
         return raw_data
 
     @classmethod
-    async def process_all_transcripts(cls, redis_client: Redis, engine_client: EngineAPIClient):
+    async def push2engine(cls, redis_client: Redis, engine_client: EngineAPIClient):
         """Process all transcript data from Redis using EngineAPIClient.
         
         Args:

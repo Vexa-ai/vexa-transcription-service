@@ -59,10 +59,10 @@ class SpeakerMeta(BaseModel):
                     timestamp = datetime.fromisoformat(timestamp_str.rstrip('Z'))
                 else:
                     logger.warning("No timestamp found in speaker data")
-                    timestamp = datetime.now(timezone.utc)
+                   # timestamp = datetime.now(timezone.utc)
             except (ValueError, AttributeError):
                 logger.warning(f"Invalid timestamp format in speaker data: {data.get('user_timestamp') or data.get('timestamp')}")
-                timestamp = datetime.now(timezone.utc)
+               # timestamp = datetime.now(timezone.utc)
             
             return cls(
                 name=data['speaker_name'],
@@ -248,14 +248,20 @@ class TranscriptSpeakerMatcher:
         # Process speaker data
         if len(speakers_df) > 0:
             # Filter by mic level and sort
-            speakers_df = speakers_df[speakers_df['mic'] > self.min_mic_level]
+            speakers_df = pd.DataFrame([{
+                        'speaker': s.name,
+                        'mic': s.mic_level,
+                        'timestamp': s.timestamp,
+                        'speaker_delay_sec': s.delay_sec
+                    } for s in speaker_data])
+
             speakers_df = speakers_df.sort_values(['timestamp', 'mic'], ascending=[True, False])
-            
-            # Apply speaker delay
             speakers_df['timestamp'] = pd.to_datetime(speakers_df['timestamp'], utc=True)
             speakers_df['timestamp'] -= pd.to_timedelta(speakers_df['speaker_delay_sec'], unit='s')
-            
-            # Group speakers into continuous segments
+            speakers_df['timestamp'] = speakers_df['timestamp'].dt.floor('s')
+            speakers_df = speakers_df.groupby(['timestamp']).agg({'mic': 'max', 'speaker': 'first'}).reset_index()
+            speakers_df = speakers_df.sort_values(['timestamp', 'mic','speaker'], ascending=[True, False, True])
+
             speakers_df['change'] = speakers_df['speaker'] != speakers_df['speaker'].shift()
             speakers_df['change'] = speakers_df['change'].cumsum()
             

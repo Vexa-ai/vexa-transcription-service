@@ -4,7 +4,7 @@ import logging
 from app.redis_transcribe.connection import get_redis_client
 from app.settings import settings
 from app.services.transcription.processor import Processor
-
+from app.services.audio.redis_models import TranscriptStore
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +29,10 @@ async def main():
             except Exception as ex:
                 logger.error(f"Error in transcription loop: {ex}")
             finally:
+                try:
+                    await TranscriptStore.push2engine(redis_client, processor.engine_client)
+                except Exception as ex:
+                    logger.error(f"Error in pushing to engine: {ex}")
                 await processor.do_finally()
                 await asyncio.sleep(0.1)
     except Exception as e:

@@ -161,12 +161,17 @@ class Processor:
             # Process and match segments
             matched_segments = await self._process_segments(transcription_result['segments'])
             self.logger.info(f"Processed and matched {len(matched_segments)} segments with speakers")
-            
-            # Store and queue segments
-            success = await self._store_and_queue_segments(matched_segments)
-            self.logger.info(f"{'Successfully stored' if success else 'Failed to store'} segments to Redis and queue")
-            
-            self.done = success
+
+
+            for segment in matched_segments:
+                transcription = TranscriptStore(
+                    self.meeting.meeting_id,
+                    self.redis_client,
+                    segment.to_dict()
+                )
+                await transcription.lpush()
+
+            self.done = True
         except Exception as e:
             self.logger.error(f"Error in transcription process: {str(e)}", exc_info=True)
             self.done = False
