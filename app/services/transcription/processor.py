@@ -124,21 +124,65 @@ class Processor:
 
             seek = (self.seek_timestamp - self.connection.start_timestamp).total_seconds()
             self.logger.info(f"seek: {seek}")
-            path = f"/data/audio/{self.connection.id}.webm"
-
+            
+            # First try to read from file system since it's more reliable
+            file_path = f"/data/audio/{self.connection.id}.webm"
+            if os.path.exists(file_path):
+                try:
+                    self.logger.info(f"Reading audio from file system: {file_path}")
+                    self.audio_slicer = await AudioSlicer.from_ffmpeg_slice(
+                        file_path,
+                        seek,
+                        self.max_length
+                    )
+                    self.slice_duration = self.audio_slicer.audio.duration_seconds
+                    self.audio_data = await self.audio_slicer.export_data()
+                    self.logger.info(f"Successfully read audio from file, duration: {self.slice_duration}s")
+                    return True
+                except Exception as e:
+                    self.logger.error(f"Failed to read audio from file: {e}")
+                    # Fall back to Redis
+            
+            # If file not available, try Redis
             try:
-                self.audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, self.max_length)
+                self.logger.info(f"Attempting to read audio from Redis for connection {self.connection.id}")
+                self.audio_slicer = await AudioSlicer.from_redis_slice(
+                    self.redis_client, 
+                    self.connection.id, 
+                    seek, 
+                    self.max_length
+                )
                 self.slice_duration = self.audio_slicer.audio.duration_seconds
                 self.audio_data = await self.audio_slicer.export_data()
+                self.logger.info(f"Successfully read audio from Redis, duration: {self.slice_duration}s")
                 return True
+            
+            except AudioFileCorruptedError as e:
+                # If Redis fails, try falling back to file system
+                self.logger.warning(f"Could not read audio from Redis: {str(e)}. Falling back to file system.")
+                
+                # Fallback to file-based approach
+                path = f"/data/audio/{self.connection.id}.webm"
+                
+                try:
+                    self.audio_slicer = await AudioSlicer.from_ffmpeg_slice(path, seek, self.max_length)
+                    self.slice_duration = self.audio_slicer.audio.duration_seconds
+                    self.audio_data = await self.audio_slicer.export_data()
+                    self.logger.info(f"Successfully read audio from file system, duration: {self.slice_duration}s")
+                    return True
 
-            except AudioFileCorruptedError:
-                self.logger.error(f"Audio file at {path} is corrupted")
-                await self.meeting.delete_connection(self.connection.id)
-                return
+                except AudioFileCorruptedError:
+                    self.logger.error(f"Audio file at {path} is corrupted")
+                    await self.meeting.delete_connection(self.connection.id)
+                    return
 
-            except Exception:
-                self.logger.error(f"could not read file {path} at seek {seek} with length {self.max_length}")
+                except Exception as e:
+                    self.logger.error(f"Could not read file {path} at seek {seek} with length {self.max_length}: {str(e)}")
+                    await self.meeting.delete_connection(self.connection.id)
+                    return
+            
+            except Exception as e:
+                self.logger.error(f"Unexpected error reading audio: {str(e)}")
                 await self.meeting.delete_connection(self.connection.id)
                 return
 
