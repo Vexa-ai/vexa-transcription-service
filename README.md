@@ -1,106 +1,74 @@
 # Real-Time Audio Transcription Service
 
-A production-ready, scalable real-time audio transcription system designed for enterprise and SaaS applications. This service functions as the backbone for real-time transcription across various communication platforms, converting audio chunks into text with advanced speaker identification capabilities.
+A **production-ready, scalable** real-time audio transcription system designed for **enterprise and SaaS applications**. This system powers **secure, private, and highly accurate speech-to-text conversion**, serving as the **backbone for Vexa.ai**, an **alternative to Otter.ai, Fireflies.ai, and Tactiq.io**, enabling enterprises to build custom AI-powered conversation processing solutions.
 
-## Data Privacy & Security
+> **🔒 Enterprise-Grade Security & Compliance** Unlike cloud-based transcription services, this system allows for full **on-premise deployment**, ensuring that all transcription data remains within your organization's infrastructure. Ideal for **high-security environments**.
 
-### Private Deployment for Enterprises
-One of the primary advantages of this system is its ability to be deployed entirely within an organization's private infrastructure. Unlike cloud-based transcription services:
+## 🚀 Why Choose This Transcription System?
 
-- **Complete data sovereignty**: All audio data and transcriptions remain within your organization's boundaries
-- **No external data sharing**: Sensitive meeting content never leaves your network
-- **Compliance-friendly**: Helps meet regulatory requirements for data handling (GDPR, HIPAA, etc.)
-- **Custom security policies**: Apply your organization's existing security protocols and access controls
-- **Airgapped deployment options**: Can operate in environments with no internet access for maximum security
+### **Enterprise-First Approach**
 
+✔ **Multiuser Production-Ready** – Built for **enterprise-scale** deployment ✔ **Data Sovereignty** – Your audio and text **never leave your network** ✔ **GDPR & HIPAA Compliance** – Meet strict data privacy regulations ✔ **Custom Security Policies** – Integrate with your **existing authentication** & access controls ✔ **Air-Gapped Deployment** – Works in **offline environments** ✔ **Enterprise Scalability** – Designed for large workloads, supporting 1000s of concurrent users
 
-## Use Cases
+### **Core Capabilities**
 
-### Enterprise Meeting Transcription
-- Automatically transcribe all company meetings across Google Meet, Zoom, and Microsoft Teams
-- Identify speakers correctly even in large meetings
-- Store searchable transcripts with speaker attribution
+✅ **Real-time transcription** with speaker detection\
+✅ **Multi-platform support** – **Google Meet Chrome Extension available**, future integrations for Zoom, Microsoft Teams, Slack, etc.\
+✅ **Bring Your Own Data Source** – Flexible API allows integration with **custom platforms**\
+✅ **5-10 second transcription latency** for seamless live captions\
+✅ **Redis-backed storage** for fast retrieval & webhook-based integrations\
+✅ **Whisper v3 (optimized) for high-accuracy speech-to-text**\
+✅ **GPU acceleration** for ultra-fast processing
 
-### Customer Service and Call Centers
-- Transcribe customer calls in real-time
-- Provide agents with live transcription during calls
-- Archive conversations with accurate speaker identification
+---
 
-### Educational Environments
-- Transcribe lectures and classes conducted over video conferencing platforms
-- Generate accessible content for students with hearing impairments
-- Create searchable archives of educational content
+## 🏢 **Who Should Use This?**
 
-### Content Creation
-- Automatically transcribe podcasts and interviews
-- Generate subtitles for video content
-- Create text versions of audio content for multi-channel publishing
+We are actively looking for **enterprises and SaaS teams** currently using services like **Otter.ai, Fireflies.ai, and Tactiq.io**, but need **better privacy, control, and customization**.
 
-## Integration Examples
+🔹 **Enterprise Meeting Transcription** – Automate meeting notes with speaker attribution\
+🔹 **Customer Support & Call Centers** – Real-time call transcription & agent assistance\
+🔹 **Education & Accessibility** – Create searchable lecture transcripts & captions\
+🔹 **Content Creation** – Transcribe podcasts, generate subtitles, and repurpose audio content\
+🔹 **Medical & Healthcare** – Secure, HIPAA-compliant transcription for patient records\
+🔹 **Sales & CRM** – Capture and analyze sales calls for insights and training\
+🔹 **Internal Management Meetings** – Automate documentation of leadership discussions\
+🔹 **Legal & Compliance** – Generate accurate transcripts for legal proceedings and documentation
 
-### Google Meet Integration
-The system automatically extracts speaker identification data from Google Meet sessions, matching speakers to their transcribed content with high accuracy.
+---
 
-### Zoom Integration
-Compatible with Zoom's audio streams, allowing for real-time transcription of Zoom meetings and webinars.
+## ⚙️ System Architecture
 
-### Custom Client Integration
-The API is designed to be easily integrated with custom clients, providing a simple interface for sending audio chunks and retrieving transcriptions. 
+The pipeline consists of **scalable microservices** designed for **high-volume real-time transcription**:
 
+### **1️⃣ StreamQueue API** – Handles reliable audio ingestion
 
+- Ensures delivery of **audio chunks every 3 seconds**
+- Supports **multiple concurrent sessions**
 
-## Features
+### **2️⃣ Audio Processing Service** – Core audio transcription engine
 
-- **Multi-platform support**: Works seamlessly with Google Meet, Zoom, Microsoft Teams, Slack and other communication platforms
-- **Automatic speaker identification**: Extracts speaker information directly from Google Meet and compatible platforms
-- **Real-time processing**: Handles audio chunks sent every 3 seconds
-- **Speaker mapping**: Optional speaker name mapping with 1-second update intervals
-- **Low latency**: Provides transcriptions with only 5-10 second latency
-- **Reliable storage**: Saves transcribed segments to Redis
-- **Webhook integration**: Optional webhook calls to external APIs
-- **Scalable architecture**: Built on containerized microservices for enterprise workloads
-- **High accuracy**: Uses the optimized Whisper large-v3 model for transcription
-- **Production-ready**: Designed for enterprise and SaaS deployment
-- **Open-source**: Fully open-source implementation
+- Calls **Whisper Service** for speech-to-text processing
+- Stores transcriptions **with speaker metadata** in Redis
+- Supports **webhook integrations** for real-time updates
 
-## System Architecture
+### **3️⃣ Whisper Service** – GPU-powered transcription module
 
-The system consists of several key components working together in a production-ready architecture:
+- Runs **Whisper large-v3** model for **best accuracy**
+- Deployed with **Ray Serve** for **scalability & efficiency**
 
-### 1. StreamQueue API
-- Acts as the entry point for audio streams from communication platforms
-- Ensures reliable ingestion of audio chunks with guaranteed delivery
-- Handles high-volume traffic from multiple concurrent sessions
-- Provides robust error handling and recovery mechanisms
+### **4️⃣ Redis Storage** – Fast, ephemeral transcript storage
 
-### 2. Audio Processing Service
-- Processes incoming audio streams from various communication platforms
-- Handles audio file storage and metadata management with optimized performance
-- Calls the Whisper service for high-accuracy transcription
-- Maps transcriptions with speaker information extracted from platforms like Google Meet
-- Stores results in Redis with appropriate TTL settings
-- Optionally forwards to downstream services via webhooks
+- Enables **quick retrieval & session-based storage**
+- Serves as a **message broker** between services
 
-### 3. Whisper Service
-- Provides scalable, GPU-accelerated speech-to-text using faster-whisper
-- Deployed using Ray Serve for efficient resource utilization
-- Low-latency processing for real-time applications
+---
 
-### 4. Redis Storage
-- Central storage for transcribed segments
-- Enables fast retrieval and persistence
-- Serves as a message broker between components
+## 🛠 **Quick Start**
 
-## Prerequisites
+### **1. Clone the Repositories**
 
-- Docker and Docker Compose
-- NVIDIA GPU with appropriate drivers (for Whisper Service)
-
-## Quick Start
-
-### 1. Clone the repositories
-
-```bash
+```sh
 # Clone the audio processing service
 git clone https://github.com/yourusername/audio.git
 
@@ -108,170 +76,75 @@ git clone https://github.com/yourusername/audio.git
 git clone https://github.com/yourusername/whisper_service.git
 ```
 
-### 2. Set up environment variables
+### **2. Configure the Environment**
 
-Copy the example environment files and configure them:
-
-```bash
-# For audio service
+```sh
+# Set up environment variables for audio service
 cd audio
 cp .env.example .env
 
-# For whisper service
+# Set up environment variables for whisper service
 cd ../whisper_service
 cp .env.example .env
 ```
 
-Edit the `.env` files to configure your setup. **Critical settings include**:
+Edit `.env` files to configure **API tokens, GPU settings, and webhooks**.
 
-**For whisper_service/.env:**
-```
-WHISPER_API_TOKEN=your_secure_token  # Must match WHISPER_API_TOKEN in audio/.env
-WHISPER_MODEL_SIZE=large-v3
-WHISPER_DEVICE=cuda                  # Ensure this is set to 'cuda' for GPU acceleration
-WHISPER_NUM_GPUS=0.5                 # Adjust based on your GPU resources
-```
+### **3. Start the Whisper Service** (GPU Required)
 
-**For audio/.env:**
-```
-# Connection to Whisper Service
-WHISPER_SERVICE_URL=http://host.docker.internal:8033  # Adjust if running on different hosts
-WHISPER_API_TOKEN=your_secure_token                   # Must match token in whisper_service
-
-# Webhook connection (if using)
-ENGINE_API_URL=http://your-api-endpoint
-ENGINE_API_TOKEN=your_webhook_token
-```
-
-### 3. Start the Whisper Service with GPU Access
-
-Ensure your system has NVIDIA Docker support installed:
-
-```bash
-# Check NVIDIA Docker installation
-nvidia-smi
-docker run --gpus all nvidia/cuda:11.0-base nvidia-smi
-```
-
-Start the Whisper Service with GPU access:
-
-```bash
+```sh
 cd whisper_service
 docker-compose up -d
 ```
 
-**Important:** Verify the service has GPU access by checking the logs:
+### **4. Start the Audio Service**
 
-```bash
-docker-compose logs
-```
-
-You should see logs indicating the CUDA device is being used. If not, check your Docker GPU setup.
-
-### 4. Start the Audio Service
-
-Once the Whisper Service is running properly with GPU access:
-
-```bash
+```sh
 cd ../audio
 docker-compose up -d
 ```
 
-Verify proper startup:
+---
 
-```bash
-docker-compose logs
+## 🔌 **Integration Guide**
+
+### **1️⃣ Sending Audio Chunks** (Example in JavaScript)
+
+```js
+async function sendAudioChunk(audioBlob, sessionId) {
+  await fetch('http://your-server:8000/api/audio/stream', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer your_api_token',
+      'Content-Type': 'application/octet-stream',
+      'X-Session-ID': sessionId
+    },
+    body: audioBlob
+  });
+}
 ```
 
-### 5. Testing Your Installation
+### **2️⃣ Updating Speaker Info**
 
-To ensure everything is working properly:
-
-```bash
-# Test the Whisper Service directly
-curl -X POST \
-  "http://localhost:8033/" \
-  -H "Authorization: Bearer your_whisper_api_token" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @sample_audio.webm
-
-# Test the Audio Service
-curl -X POST \
-  "http://localhost:8000/api/audio/stream" \
-  -H "Authorization: Bearer your_api_token" \
-  -H "Content-Type: application/octet-stream" \
-  --data-binary @audio_chunk.webm
+```js
+async function updateSpeaker(sessionId, speakerName) {
+  await fetch('http://your-server:8000/api/speaker', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer your_api_token',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ session_id: sessionId, speaker_name: speakerName })
+  });
+}
 ```
 
-## Integration Guide
-
-### Client Integration
-
-To integrate your client application with this service:
-
-1. **Audio Capture Implementation**:
-   - Capture audio in chunks (typically 3-second segments)
-   - Convert/save as webm format (preferred)
-   - Implement a queue mechanism in case of network issues
-
-2. **Send Audio Data**:
-   ```javascript
-   // Example JavaScript code for sending audio chunks
-   async function sendAudioChunk(audioBlob, sessionId) {
-     try {
-       const response = await fetch('http://your-server:8000/api/audio/stream', {
-         method: 'POST',
-         headers: {
-           'Authorization': 'Bearer your_api_token',
-           'Content-Type': 'application/octet-stream',
-           'X-Session-ID': sessionId
-         },
-         body: audioBlob
-       });
-       return response.ok;
-     } catch (error) {
-       console.error('Error sending audio chunk:', error);
-       return false;
-     }
-   }
-   ```
-
-3. **Speaker Information (if available)**:
-   ```javascript
-   // Example for sending speaker information
-   async function updateSpeaker(sessionId, speakerName) {
-     try {
-       const response = await fetch('http://your-server:8000/api/speaker', {
-         method: 'POST',
-         headers: {
-           'Authorization': 'Bearer your_api_token',
-           'Content-Type': 'application/json'
-         },
-         body: JSON.stringify({
-           session_id: sessionId,
-           speaker_name: speakerName
-         })
-       });
-       return response.ok;
-     } catch (error) {
-       console.error('Error updating speaker:', error);
-       return false;
-     }
-   }
-   ```
-
-### Receiving Transcriptions
-
-There are two ways to receive transcriptions:
-
-#### 1. Implement a Webhook Endpoint
-
-Create an API endpoint in your application to receive transcription data:
+### **3️⃣ Receiving Transcriptions via Webhook**
 
 ```python
-from fastapi import FastAPI, Depends, HTTPException, Security, Body
+from fastapi import FastAPI, Body
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict
 
 app = FastAPI()
 
@@ -280,67 +153,39 @@ class TranscriptionSegment(BaseModel):
     start_timestamp: str
     end_timestamp: str
     speaker: str = None
-    words: List[Dict[str, Any]] = []
+    words: List[Dict] = []
 
 @app.post("/api/transcriptions/{session_id}")
-async def receive_transcription(
-    session_id: str, 
-    segments: List[TranscriptionSegment] = Body(...)
-):
-    # Process incoming transcription segments
-    # Store in your database, display to user, etc.
+async def receive_transcription(session_id: str, segments: List[TranscriptionSegment] = Body(...)):
+    print("Transcription received:", segments)
     return {"status": "success"}
 ```
 
-Configure this endpoint URL in your audio service's `.env` file:
-```
-ENGINE_API_URL=http://your-api-endpoint/api/transcriptions
-ENGINE_API_TOKEN=your_secure_token
-```
+---
 
-#### 2. Access Data from Redis
+## 🤝 **How to Contribute**
 
-If you prefer direct access to Redis:
+We welcome **contributions from enterprises and developers**! If your company is migrating from **Otter.ai, Fireflies, or Tactiq**, we’d love to hear your use case.
 
-```python
-import redis
-import json
+### **Ways to Contribute**
 
-# Connect to Redis
-r = redis.Redis(
-    host='your_redis_host',
-    port=6379,
-    password='your_redis_password'
-)
+\
+✅ **Optimize latency & scaling** for enterprise workloads\
+✅ **Enhance security & compliance features**\
+✅ **Integrate with CRM, customer support tools, and knowledge bases**\
+✅ **Integrate with Zoom and Microsoft Teams for seamless transcription**
 
-# Retrieve transcriptions for a session
-def get_transcriptions(session_id):
-    # Get all transcription segments for the session
-    key = f"segments_transcribe:{session_id}"
-    raw_data = r.lrange(key, 0, -1)
-    
-    # Parse JSON data
-    segments = []
-    for item in raw_data:
-        segment = json.loads(item)
-        segments.append(segment)
-    
-    return segments
-```
+🚀 **Join the open-source effort today!** Submit a **Pull Request**, open a **GitHub Issue**, or **contact us**.
 
+---
 
-## Contributing
+## 🔗 **Related Projects**
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+This project is a core component of **[Vexa](https://vexa.ai)** – an **AI-powered meeting intelligence** platform that extends transcription into **business knowledge extraction**.
 
-## License
+🔹 Try Vexa for **real-time transcription & AI-driven insights**: [vexa.ai](https://vexa.ai)\
+🔹 Follow us: [@vexa.ai](https://linkedin.com/company/vexa-ai)\
+🔹 Join our **developer community**: [Vexa Discord](https://discord.gg/vexa)
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
-- [Ray Serve](https://docs.ray.io/en/latest/serve/index.html)
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Redis](https://redis.io/)
+⭐ **Star this repo** to get notified when the public release goes live!
 
