@@ -77,10 +77,10 @@ The pipeline consists of **scalable microservices** designed for **high-volume r
 
 ```sh
 # Clone the audio processing service
-git clone https://github.com/yourusername/audio.git
+git clone https://github.com/Vexa-ai/vexa-transcription-service
 
 # Clone the whisper service
-git clone https://github.com/yourusername/whisper_service.git
+git clone https://github.com/Vexa-ai/whisper_service
 ```
 
 ### **2. Configure the Environment**
