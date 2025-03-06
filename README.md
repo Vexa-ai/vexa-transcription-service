@@ -1,65 +1,72 @@
 # Real-Time Audio Transcription Service
 
-A **production-ready, scalable** real-time audio transcription system designed for **enterprise and SaaS applications**. This system powers **secure, private, and highly accurate speech-to-text conversion**, serving as the **backbone for Vexa.ai**, an **alternative to Otter.ai, Fireflies.ai, and Tactiq.io**, enabling enterprises to build custom AI-powered conversation processing solutions.
+A **production-ready, scalable** real-time audio transcription system designed for **enterprise and SaaS applications**. This system powers **secure, private, and highly accurate speech-to-text conversion**, serving as the **backbone for Vexa.ai**, an **alternative to Otter.ai, Fireflies.ai, and Tactiq.io**, enabling enterprises to build custom AI-powered conversation processing solutions. With **self-hosted** and **on-premise** deployment options, it offers **data sovereignty**, **compliance**, and **privacy** for mission-critical use cases.
 
-> **🔒 Enterprise-Grade Security & Compliance** Unlike cloud-based transcription services, this system allows for full **on-premise deployment**, ensuring that all transcription data remains within your organization's infrastructure. Ideal for **high-security environments**.
+> **🔒 Enterprise-Grade Security & Compliance**  
+> Unlike typical cloud-based transcription services, this system can be deployed fully **on-premise**, ensuring all transcription data stays within your infrastructure. Perfect for **air-gapped**, **HIPAA**, **GDPR**, and other high-security environments.
+
+> **⭐ If you find this project useful, please star it on GitHub to show your support!**
 
 ## 🚀 Why Choose This Transcription System?
 
 ### **Enterprise-First Approach**
 
-✔ **Multiuser Production-Ready** – Built for **enterprise-scale** deployment ✔ **Data Sovereignty** – Your audio and text **never leave your network** ✔ **GDPR & HIPAA Compliance** – Meet strict data privacy regulations ✔ **Custom Security Policies** – Integrate with your **existing authentication** & access controls ✔ **Air-Gapped Deployment** – Works in **offline environments** ✔ **Enterprise Scalability** – Designed for large workloads, supporting 1000s of concurrent users
+✔ **Multiuser Production-Ready** – Built for **enterprise-scale** deployment  
+✔ **Data Sovereignty** – Your audio and text **never leave your network**  
+✔ **GDPR & HIPAA Compliance** – Meet strict data privacy regulations  
+✔ **Custom Security Policies** – Integrate with your **existing authentication** & access controls  
+✔ **Air-Gapped Deployment** – Works in **offline environments**  
+✔ **Enterprise Scalability** – Designed for large workloads, supporting 1000s of concurrent users
 
-### **Core Capabilities**
+### **Core Capabilities**  
 
-✅ **Real-time transcription** with speaker detection\
-✅ **Multi-platform support** – **Google Meet Chrome Extension available**, future integrations for Zoom, Microsoft Teams, Slack, etc.\
-✅ **Bring Your Own Data Source** – Flexible API allows integration with **custom platforms**\
-✅ **5-10 second transcription latency** for seamless live captions\
-✅ **Redis-backed storage** for fast retrieval & webhook-based integrations\
-✅ **Whisper v3 (optimized) for high-accuracy speech-to-text**\
-✅ **GPU acceleration** for ultra-fast processing
+✅ **Real-time transcription** with advanced **speaker detection**  
+✅ **Multi-platform support** – **Google Meet Chrome Extension**, future integrations for Zoom, Microsoft Teams, Slack, etc.  
+✅ **Bring Your Own Data Source** – Flexible API allows integration with **custom platforms**  
+✅ **5-10 second latency** for **live captions**  
+✅ **Redis-backed storage** for fast retrieval & webhook-based integrations  
+✅ **Whisper v3 (optimized) for high-accuracy speech-to-text**  
+✅ **GPU acceleration** for **ultra-fast processing**  
+✅ **Self-Hosted & On-Premise** – Perfect for **enterprise security** and **data sovereignty**  
+
+> **Keywords**: AI transcription, real-time speech-to-text, open-source, self-hosted, on-premise, meeting notes, voice recognition, Otter.ai alternative, enterprise compliance, data privacy, audio processing
 
 ---
 
 ## 🏢 **Who Should Use This?**
 
-We are actively looking for **enterprises and SaaS teams** currently using services like **Otter.ai, Fireflies.ai, and Tactiq.io**, but need **better privacy, control, and customization**.
+Ideal for **enterprises** and **SaaS teams** seeking more **privacy, control, and customization** than offered by commercial platforms like **Otter.ai**, **Fireflies.ai**, and **Tactiq.io**.
 
-🔹 **Enterprise Meeting Transcription** – Automate meeting notes with speaker attribution\
-🔹 **Customer Support & Call Centers** – Real-time call transcription & agent assistance\
-🔹 **Education & Accessibility** – Create searchable lecture transcripts & captions\
-🔹 **Content Creation** – Transcribe podcasts, generate subtitles, and repurpose audio content\
-🔹 **Medical & Healthcare** – Secure, HIPAA-compliant transcription for patient records\
-🔹 **Sales & CRM** – Capture and analyze sales calls for insights and training\
-🔹 **Internal Management Meetings** – Automate documentation of leadership discussions\
+🔹 **Enterprise Meeting Transcription** – Automate meeting notes with speaker attribution  
+🔹 **Customer Support & Call Centers** – Real-time call transcription & agent assistance  
+🔹 **Education & Accessibility** – Create searchable lecture transcripts & captions  
+🔹 **Content Creation** – Transcribe podcasts, generate subtitles, and repurpose audio content  
+🔹 **Medical & Healthcare** – Secure, HIPAA-compliant transcription for patient records  
+🔹 **Sales & CRM** – Capture and analyze sales calls for insights and training  
+🔹 **Internal Management Meetings** – Automate documentation of leadership discussions  
 🔹 **Legal & Compliance** – Generate accurate transcripts for legal proceedings and documentation
 
 ---
 
 ## ⚙️ System Architecture
 
-The pipeline consists of **scalable microservices** designed for **high-volume real-time transcription**:
+The pipeline consists of **scalable microservices** designed for **high-volume real-time transcription** and **enterprise workloads**:
 
 ### **1️⃣ StreamQueue API** – Handles reliable audio ingestion
-
-- Ensures delivery of **audio chunks every 3 seconds**
+- Ensures delivery of **audio chunks every 3 seconds**  
 - Supports **multiple concurrent sessions**
 
 ### **2️⃣ Audio Processing Service** – Core audio transcription engine
-
-- Calls **Whisper Service** for speech-to-text processing
-- Stores transcriptions **with speaker metadata** in Redis
+- Calls **Whisper Service** for speech-to-text processing  
+- Stores transcriptions **with speaker metadata** in Redis  
 - Supports **webhook integrations** for real-time updates
 
 ### **3️⃣ Whisper Service** – GPU-powered transcription module
-
-- Runs **Whisper large-v3** model for **best accuracy**
+- Runs **Whisper large-v3** model for **best accuracy**  
 - Deployed with **Ray Serve** for **scalability & efficiency**
 
 ### **4️⃣ Redis Storage** – Fast, ephemeral transcript storage
-
-- Enables **quick retrieval & session-based storage**
+- Enables **quick retrieval & session-based storage**  
 - Serves as a **message broker** between services
 
 ---
@@ -169,11 +176,11 @@ We welcome **contributions from enterprises and developers**! If your company is
 
 ### **Ways to Contribute**
 
-\
-✅ **Optimize latency & scaling** for enterprise workloads\
-✅ **Enhance security & compliance features**\
-✅ **Integrate with CRM, customer support tools, and knowledge bases**\
-✅ **Integrate with Zoom and Microsoft Teams for seamless transcription**
+✅ **Optimize latency & scaling** for enterprise workloads  
+✅ **Enhance security & compliance features**  
+✅ **Integrate with CRM, customer support tools, and knowledge bases**  
+✅ **Integrate with Zoom and Microsoft Teams for seamless transcription**  
+✅ **Improve language support & accuracy** (multi-lingual models)
 
 🚀 **Join the open-source effort today!** Submit a **Pull Request**, open a **GitHub Issue**, or **contact us**.
 
@@ -181,11 +188,12 @@ We welcome **contributions from enterprises and developers**! If your company is
 
 ## 🔗 **Related Projects**
 
-This project is a core component of **[Vexa](https://vexa.ai)** – an **AI-powered meeting intelligence** platform that extends transcription into **business knowledge extraction**.
+This project is a core component of [**Vexa**](https://vexa.ai) – an **AI-powered meeting intelligence** platform that extends transcription into **business knowledge extraction**.
 
-🔹 Try Vexa for **real-time transcription & AI-driven insights**: [vexa.ai](https://vexa.ai)\
-🔹 Follow us: [@vexa.ai](https://linkedin.com/company/vexa-ai)\
+🔹 Try Vexa for **real-time transcription & AI-driven insights**: [vexa.ai](https://vexa.ai)  
+🔹 Follow us: [@vexa.ai](https://linkedin.com/company/vexa-ai)  
 🔹 Join our **developer community**: [Vexa Discord](https://discord.gg/vexa)
 
-⭐ **Star this repo** to get notified when the public release goes live!
+**If you find this project helpful, please give us a ⭐ to support our community-driven development!**
 
+ 
