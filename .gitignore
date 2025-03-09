@@ -9,8 +9,7 @@ audio.egg-info/
 venv/
 
 *.py[ocd]
-.env*
-!.env_example
+.env
 
 *.log
 engine_
