@@ -22,15 +22,15 @@ services:
     # command: tail -f /dev/null
     restart: unless-stopped
     ports:
-      - "${API_PORT}:${API_PORT}"
+      - "${TRANSCRIPTION_SERVICE_API_PORT}:${TRANSCRIPTION_SERVICE_API_PORT}"
     depends_on:
       - redis
     environment:
       - REDIS_HOST
       - REDIS_PORT
       - API_HOST
-      - API_PORT
-      - API_TOKEN
+      - TRANSCRIPTION_SERVICE_API_PORT
+      - TRANSCRIPTION_SERVICE_API_TOKEN
       - AUDIO_CHUNK_DURATION_SEC
       - REDIS_PASSWORD
       - PYTHONPATH=/app/streamqueue:/app/shared_lib
@@ -60,12 +60,14 @@ services:
       - CHECK_AND_PROCESS_CONNECTIONS_INTERVAL_SEC
       - SPEAKER_DELAY_SEC
       - WHISPER_SERVICE_URL
+      - WHISPER_PORT
       - WHISPER_API_TOKEN
       - RAW_AUDIO_PATH
       - SEGMENTS_PATH
       - REDIS_PASSWORD
       - TRANSCRIBER_STEP_SEC
       - MAX_AUDIO_LENGTH_SEC
+      - ENGINE_API_PORT
       - ENGINE_API_URL
       - ENGINE_API_TOKEN
       - PYTHONPATH=/usr/src/app

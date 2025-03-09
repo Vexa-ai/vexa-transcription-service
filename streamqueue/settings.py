@@ -16,10 +16,10 @@ class Settings(BaseSettings):
     redis_host: str = os.getenv('REDIS_HOST')
     redis_port: int = int(os.getenv('REDIS_PORT'))
     redis_password: str | None = os.getenv('REDIS_PASSWORD')
-    api_port: int = int(os.getenv('API_PORT'))
+    api_port: int = int(os.getenv('TRANSCRIPTION_SERVICE_API_PORT'))
     audio_chunk_duration_sec: int = int(os.getenv('AUDIO_CHUNK_DURATION_SEC'))
 
-    service_token: str = os.getenv('API_TOKEN')
+    service_token: str = os.getenv('TRANSCRIPTION_SERVICE_API_TOKEN')
     
     speaker_delay_sec: int = 1
 

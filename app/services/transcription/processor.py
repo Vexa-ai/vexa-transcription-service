@@ -52,7 +52,9 @@ class Processor:
     logger: Any = field(default=logging.getLogger(__name__))
     whisper_service_url: str = field(default_factory=lambda: os.getenv("WHISPER_SERVICE_URL"))
     whisper_api_token: str = field(default_factory=lambda: os.getenv("WHISPER_API_TOKEN"))
+    engine_api_port: str = field(default_factory=lambda: os.getenv("ENGINE_API_PORT"))
     engine_api_url: str = field(default_factory=lambda: os.getenv("ENGINE_API_URL"))
+    
     engine_api_token: str = field(default_factory=lambda: os.getenv("ENGINE_API_TOKEN"))
     max_length: int = field(default=30)
 
