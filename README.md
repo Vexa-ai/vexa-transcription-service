@@ -192,7 +192,7 @@ This project is a core component of [**Vexa**](https://vexa.ai) – an **AI-powe
 
 🔹 Try Vexa for **real-time transcription & AI-driven insights**: [vexa.ai](https://vexa.ai)  
 🔹 Follow us: [@vexa.ai](https://linkedin.com/company/vexa-ai)  
-🔹 Join our **developer community**: [Vexa Discord](https://discord.gg/vexa)
+🔹 Join our **developer community**: [Vexa Discord](https://discord.gg/Ga9duGkVz9)
 
 **If you find this project helpful, please give us a ⭐ to support our community-driven development!**
 
